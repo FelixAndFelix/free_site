@@ -15,6 +15,9 @@ Ziele des Dokuments sind:
 - Vote: Eine Abstimmung, die ein Student zu einem Modul gibt.
 - Kurs: Jahrgangskurs, in dem der Student ist.
 - Modul: Ein Modul, welches in einzelnen Vorlesungen vorgestellt wird. Beide Begriffe meinen die gleiche Entität.
+- Magic Link: Ein per E-Mail versendeter Link mit einem kryptografisch signierten Token zur Authentifizierung.
+- JWT (JSON Web Token): Ein zustandsloser Token, der lokal im Browser gespeichert wird und die Berechtigung zum Abstimmen nachweist.
+- Hash_ID: Ein im Backend deterministisch erzeugter Wert (`HMAC-SHA256`), der einen Vote eindeutig einer Person zuordnet, ohne deren Identität preiszugeben.
 - System: Die gesamte Anwendung als laufendes Produktivsystem.
 - Container: Einzelner Teil des Systems, welcher einen Aufgabenbereich übernimmt (Frontend, Backend, Datenbank). Jeder Container ist selbstständig deploybar.
 - Component: Einzelne Aufgaben innerhalb eines Containers, die eine spezielle Aufgabe übernimmt. Diese sind nicht selbstständig deploybar.
@@ -39,49 +42,49 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
   - Make or Buy ist somit entschieden: Make für die Erfahrung.
   - Damit man Daten über die Vorlesungen über die vielen Semester sammeln kann. Es entsteht ein Modul-Logbuch.
 - Als Anwender will ich ... tun, um ... Ziele zu erreichen.
-  1. Als Anwender will ich zur Machbarkeit aktueller Module aus dem Semester abstimmen, um meine Meinung einzubringen.
-  2. Als Anwender will ich auf meinem Profil alle Module nach Semester gruppiert sehen, um eine Übersicht über meine Module zu haben.
-  3. Als Anwender will ich beim Klicken auf eine Abstimmung eine Detailansicht haben, um mehr zu diesem Modul zu sehen.
-  4. Als Anwender will ich mein Vote über einen eingefärbten Button abgeben, um zu sehen, was meine aktuelle Meinung zum Modul ist und ob ich bereits abgestimmt habe.
-  5. Als Anwender will ich meinen Vote in einem Balkendiagramm sehen, um eine schnelle Übersicht über das Modul zu bekommen.
-  6. Als Anwender will ich eine Login-Funktion haben, um mich als Student für den entsprechenden Kurs anzumelden.
-  7. Als Anwender will ich meinen Account wieder löschen können aus privaten Gründen.
+  1. Als Anwender will ich meine DHBW-Mail eingeben, um einen Magic Link zur Identifikation zu erhalten.
+  2. Als Anwender will ich zur Machbarkeit aktueller Module aus dem Semester abstimmen, um meine Meinung einzubringen.
+  3. Als Anwender will ich auf einer Übersicht alle Module nach Semester gruppiert sehen, um eine Übersicht über meine Module zu haben.
+  4. Als Anwender will ich beim Klicken auf eine Abstimmung eine Detailansicht haben, um mehr zu diesem Modul zu sehen.
+  5. Als Anwender will ich mein Vote über einen eingefärbten Button abgeben, um zu sehen, was meine aktuelle Meinung zum Modul ist und ob ich bereits abgestimmt habe.
+  6. Als Anwender will ich meine Stimme jederzeit ändern können, um auf neue Erfahrungen im Modul zu reagieren.
+  7. Als Anwender will ich meinen Vote in einem Balkendiagramm sehen, um eine schnelle Übersicht über das Modul zu bekommen.
   8. Als Anwender will ich die Web-App auch unterwegs mobil aufrufen, um meine Meinung über Module anzuschauen.
+  9. Als Admin will ich Module für Kurse erstellen um zu verhindern, dass jeder eine Abstimmung erstellt.
+  10. Als Admin will ich über eine fest hinterlegte E-Mail-Adresse Admin-Rechte erhalten.
+   
 
 - Abuse Case und Evil User Behavior:
-  - Als Evil User will ich die Abstimmung durch Mehrfachabstimmung manipulieren, um die Statistik zu zerstören.
-  - Als Angreifer will ich Accounts sperren, indem ich Passwörter oft falsch eingebe, um Nutzer zu sperren.
-  - Als Angreifer will ich viele Accounts erstellen, die als Datenleiche das System aufblähen, um die Datenbank zu füllen.
-  - Als Angreifer will ich versuchen, über das Abfangen der API den Namen eines Admin-Accounts zu erhalten, um sein Passwort zu bruteforcen.
+  1. Als Evil User will ich die Abstimmung durch Mehrfachabstimmung manipulieren. -> *Verhindert durch Hash_ID pro E-Mail/Modul.*
+  2. Als Angreifer will ich den E-Mail-Service als Spam-Schleuder missbrauchen. -> *Verhindert durch Cloudflare Spam Protection & Rate Limiting.*
+  3. Als Angreifer will ich gefälschte Abstimmungs-Requests senden. -> *Verhindert durch kryptografische JWT-Signaturprüfung.*
+  4. Als Angreifer will ich versuchen, über das Abfangen der API den Namen eines Admin-Accounts zu erhalten, um sein Passwort zu bruteforcen. -> *Entfällt durch passwortlose Magic Links.*
 
 ## 2) Datenmodell
 
 - Was sind meine Daten?
-  - Auch wenn die Applikation nicht groß und komplex werden soll, fallen dennoch notwendige Nutzerdaten diverser Entitäten an, welche für die Web-App untereinander interagieren müssen.
-  - **Studenten:** Username, einzigartiger Identifier (Username reicht aus Sicherheitsgründen nicht, da man versuchen könnte, den Account zu knacken, wenn das System sagt: "Name bereits vergeben"), Passwort für ihren Account, Uni und Kurs (nach DHBW Vorbild).
-  - **Abstimmungsentität:** Ein Vote, den ein Student zu einem Fach abgibt. Speichert den Abstimmungswert, Zeitstempel.
-  - **Kommentar:** Text, Zeitstempel, UserID, ModulID
+  - **Votes:** `hash_id` (PK), `kurs_id`, `modul_id`, `vote_value`, `zeitstempel`. Speichert die anonymisierte Abstimmungsentscheidung.
+  - **Kommentar:** `text`, `zeitstempel`, `modul_id`, `hash_id`.
+  - *Hinweis:* Es werden keine Tabellen für "Studenten" mit Passwörtern oder Klarnamen geführt. Die Identität existiert nur transient im Backend während der Hash-Generierung.
 
 - Wie werden diese Daten erhoben?
-  - Studentendaten werden beim Erstellen eines Accounts erhoben.
-  - Vote und Kommentare entstehen durch die entsprechenden Schaltflächen auf der Oberfläche während der Verwendung der Software.
+  - E-Mail-Adresse wird transient zur Erzeugung des JWT und der `hash_id` genutzt.
+  - Vote und Kommentare entstehen durch die entsprechenden Schaltflächen auf der Oberfläche.
 - Wie werde ich die Daten anwenden / abrufen?
-  - Abfragen aus der Datenbank, um Langzeitgraphen zu berechnen bzw. Votes / Kommentare mit UserID zu versetzen.
-  - Speichern in einer zwischengeschalteten Cache-Struktur möglich. Daten, welche oft abgefragt, aber nicht neu berechnet werden müssen, z. B. Kommentare, sind so schnell ladbar.
+  - Das Backend berechnet die `hash_id` aus dem signierten JWT und führt ein `UPSERT` in der Datenbank aus, um bestehende Stimmen zu aktualisieren.
 - Wie interagieren die Daten untereinander?
-  - Für Langzeitanzeigen werden die Votes über den Zeitraum abgefragt.
-  - Kommentare zum passenden Modul speichern, um sie in der Detailansicht zu laden.
-  - Votes in den Diagrammen werden von allen Usern angezeigt. Der User hat aber immer die Macht über seinen Vote.
+  - Aggregation der Votes pro Modul für die Diagrammanzeige.
+  - Kommentare werden dem entsprechenden Modul zugeordnet.
 
 ## 3) MVP Idee
 
 - Ist das Feature wirklich eine Kernfunktion?
   Kernfunktionen:
 - User können über Module abstimmen.
-- User können sich mit ihrer Uni und ihrem Kurs anmelden.
-- Speichern der abgestimmten Werte in den Diagrammen, auch wenn der User die Webseite verlässt.
-- Ein User kann eine Abstimmung pro Modul tätigen.
-- User können durch Klicken auf ein Diagramm die Detailansicht zu diesem Kurs-Abstimmungs-Diagramm sehen.
+- Identifikation über DHBW-Mail und Magic Link (passwortlos).
+- Speichern der abgestimmten Werte über eine deterministische `hash_id`.
+- Ein User kann eine Abstimmung pro Modul tätigen (und überschreiben).
+- Diagramm-Ansicht der aggregierten Votes.
 
 Folgende Features nach der Erstimplementierung / Deployment:
 
@@ -89,9 +92,13 @@ Folgende Features nach der Erstimplementierung / Deployment:
 - Langzeitgraphen der Votes eines Moduls.
 - Private Profileinstellungen für User.
 - Aufzählung der eigenen Module in der "Mein Profil"-Ansicht.
--
 
 ## 4) User Interaktion Design
+- Welche Screens werden benötigt?
+  1. Login Screen (Eingabe der DHBW-Mail).
+  2. Main Screen mit Übersicht über alle Kacheln.
+  3. Detailansicht eines Kurses mit Langzeitgraph und Kommentaren.
+  4. Minimalistischer Info-Screen (Datenschutzhinweise).
 
 --> Siehe Stitch-Prototyp
 
@@ -112,17 +119,17 @@ Folgende Features nach der Erstimplementierung / Deployment:
 ## 6) High Level Architektur
 
 - Welche generellen Container hat das System (Frontend, Backend, DB, ...)? (Am besten in einem C4-Modell)
-  - Frontend
-  - Backend
-  - Datenbank relational
-  - Kapselung der Container in eigenen Dockerfiles.
+  - Frontend (React)
+  - Backend (Node.js/Express)
+  - Datenbank (PostgreSQL)
+  - Edge/Proxy (Cloudflare)
 - Wie sieht die Kommunikation zwischen diesen Teilen aus (Wer muss mit wem verbunden werden)?
-  - Frontend - Backend
-  - Backend - Datenbank
+  - Frontend -> Cloudflare -> Backend
+  - Backend -> Datenbank
 - Welches sind die kritischen Bestandteile meiner Architektur, ohne die die Applikation gar nicht läuft?
   - Datenbank: Da sie alle Votes speichert.
-  - Backend: Da es die User handelt und ihre Anfragen verarbeitet.
-  - Kommunikation zwischen Datenbank und Backend.
+  - Backend: Validierung der JWTs und Hashing.
+  - Mail-Provider: Versand der Magic Links.
 
 **Bis hierhin waren alle Überlegungen nicht technisch.**
 
@@ -131,40 +138,35 @@ Folgende Features nach der Erstimplementierung / Deployment:
 - Welche Angriffsvektoren gibt es nach STRIDE?
   - Siehe Notiz.
 - Least Privilege: Hat jede Komponente wirklich nur die minimal notwendigen Rechte auf die Daten?
-  - Ja. Jeder User kann Votes abgeben und hat sonst keinen weiteren Zugriff auf kursübergreifende Aktionen.
+  - Ja.
+- Cloudflare Protection: Schutz des Magic-Link-Endpunkts vor Spam-Bots und DDoS-Angriffen.
 - Unvertrauenswürdigkeit: Wie behandelt das System Eingaben, die zwar syntaktisch korrekt, aber semantisch bösartig sind?
-  - Keine reine Übernahme von Eingaben in Datenbank-Abfragen (Sanitizer).
-  - Keine KI-Einbindung in der Software. Somit auch keine Vorkehrung zu Prompt Injection und Jailbreaking.
+  - JWT-Signaturprüfung (H-MAC) verhindert gefälschte Identitäten.
+  - Sanitizer für Datenbank-Abfragen.
 
 ## Datenminimierung & Rollenvergabe
 
 - Welche Daten müssen User von sich preisgeben?
-  - Username
+  - DHBW E-Mail (wird nur transient verarbeitet).
 - Kann ich diese Daten minimieren oder pseudonymisieren?
-  - Für den Login keine E-Mail als Identifier nötig. Username kann ein Pseudonym sein.
+  - Ja, durch deterministisches Hashing: `HMAC-SHA256(Email + ModulID, Server_Pepper)`.
 - Sind diese Daten personenbezogen und wie gehe ich damit um?
-  - Durch Nutzerverhalten kann man trotz Pseudonym eine Person ausfindig machen.
-  - Verwendung von Echtnamen ist außerhalb der Kontrolle. Per Default wird dieser aber auch nicht erfragt / erzwungen.
+  - Die Votes sind technisch gesehen pseudonymisiert. Es werden keine Klarnamen oder Passwörter gespeichert.
 - Wie kann ich das "Recht auf Vergessenwerden" auf den technischen Komponenten umsetzen?
-  - Eine spezielle Backend-Funktion, welche die Daten aus der Datenbank löscht.
-  - Löschkaskadierung in der Datenbank.
-  - Updaten der Diagrammen.
-  - Wird getriggert, wenn man auf "Account löschen" klickt.
+  - Da keine Profile existieren, gibt es keine "Account-Löschung". User können ihre Stimmen manuell neutralisieren oder durch Leeren des LocalStorages den Bezug zu ihrer `hash_id` aufgeben.
 
 - Welche Rollen gibt es?
   - User
   - Admin
 - Wie werden diese Rollen an User vergeben?
-  - Default Deny. User haben beim Erstellen eines Accounts keine Rechte, außer Votes abzugeben.
-  - Admins können weitere Admin rollen vergeben.
-  - Admin rollen werden fest in docker env vergeben nicht beantragt.
+  - User: Automatisch durch Besitz eines DHBW-Postfachs.
+  - Admin: Identifikation über eine im Backend fest hinterlegte Liste erlaubter Admin-E-Mail-Adressen.
 - Wie werden User Identifiziert?
-  - Besitz-basiert statt Identitäts-basiert. Ein Einmal-Token (Voucher) beweist die Zugehörigkeit zum Kurs, ohne die Person zu benennen.
+  - Besitz-basiert: Wer Zugriff auf die DHBW-Mail hat, darf abstimmen.
 - Wie werden User Authentifiziert?
-  - Passwort
-- Wie stellt man sicher, dass die Rollenvergabe kein Single Point of Failure wird? - Durch die feste vergabe können verschiedene personen auf die Rolle zugreifen.
-  Bei einem solchen Kleinen system ist der Angriffsvektor über die Harte vergabe in kauf zu nehmen, da ein Vier-Augen-Prinzip überkompliziert ist.
-  (Besitz-basiert statt Identitäts-basiert. Ein Einmal-Token (Voucher) beweist die Zugehörigkeit zum Kurs, ohne die Person zu benennen.)
+  - Kryptografisch signierter JWT (Magic Link).
+- Wie stellt man sicher, dass die Rollenvergabe kein Single Point of Failure wird? - Durch die feste Vergabe (Environment-Variablen) können verschiedene Personen auf die Rolle zugreifen.
+  Bei einem solchen kleinen System ist der Angriffsvektor über die harte Vergabe in Kauf zu nehmen, da ein Vier-Augen-Prinzip überkompliziert ist.
 
 ## 7) Stack
 
@@ -190,56 +192,3 @@ Folgende Features nach der Erstimplementierung / Deployment:
 ## 9) Iterative Weiterentwicklung
 
 Ab der Implementierung des MVP und dessen Deployment können weitere Features hinzugefügt werden, die in 4. gestrichen wurden.
-
----
-
-I. Domäne & Semantik (Das Fundament)
-Wahrheitsquelle: Welches Teilsystem hält die unanfechtbare Wahrheit über einen Datensatz (Single Source of Truth)?
-
-Invariante: Welche Bedingung im System darf niemals (unter keinen Umständen) verletzt werden?
-
-Grenzziehung: Wo endet die Verantwortung dieser Software und beginnt die Verantwortung eines externen Systems/Menschen?
-
-II. Anforderungen & Qualität (ISO 25010 Fokus)
-Degradierung: Wie sieht der "Graceful Degradation"-Plan aus? Welche Funktionen bleiben erhalten, wenn die Primärdatenquelle ausfällt?
-
-Latenz-Budget: Was ist die maximal akzeptable Zeit zwischen einer Nutzeraktion und der sichtbaren Bestätigung?
-
-Evolvierbarkeit: Wie aufwendig ist es, eine Kern-Entität im Datenmodell nach dem ersten produktiven Jahr zu ändern?
-
-III. Sicherheit & Integrität (Security by Design)
-Least Privilege: Hat jede Komponente wirklich nur die minimal notwendigen Rechte auf die Daten?
-
-Unvertrauenswürdigkeit: Wie behandelt das System Eingaben, die zwar syntaktisch korrekt, aber semantisch bösartig sind?
-
-Audit-Trail: Können wir im Schadensfall zweifelsfrei rekonstruieren, wer was wann warum geändert hat, ohne die Privatsphäre zu verletzen?
-
-Shutterstock Bild
-Entdecken
-IV. Architektur & Interaktion (Struktur)
-Zustandslosigkeit: Kann jede Instanz meines Dienstes jede Anfrage bearbeiten, oder gibt es "sticky" Informationen, die eine Skalierung behindern?
-
-Idempotenz: Was passiert, wenn eine Operation (z. B. ein Vote oder ein Kauf) aufgrund eines Netzwerkfehlers zweimal gesendet wird?
-
-Vertragstreue: Sind die Schnittstellen (APIs) so definiert, dass Konsumenten bei einer internen Änderung nicht "brechen"?
-
-V. Ökonomie & Strategie (Wirtschaftlichkeit)
-Opportunitätskosten: Was bauen wir nicht, während wir an Feature X arbeiten?
-
-Wartungshorizont: Wie hoch sind die geschätzten Kosten, um das System über die geplante Lebensdauer am Laufen zu halten (Total Cost of Ownership)?
-
-Make-or-Buy: Existiert eine Open-Source-Komponente, die 80 % des Problems löst, und rechtfertigen die restlichen 20 % eine Eigenentwicklung?
-
-VI. Operationalisierung & DevOps (Betrieb)
-Observability: Wie unterscheiden wir zwischen "System ist langsam" und "System ist fehlerhaft", bevor ein Nutzer anruft?
-
-Rollback-Strategie: Wie machen wir eine fehlerhafte Datenbank-Migration im laufenden Betrieb rückgängig?
-
-Reproduzierbarkeit: Ist die Entwicklungsumgebung identisch zur Produktionsumgebung (Parity)?
-
-VII. Mensch & Prozess (UX & Team)
-Fehler-Affordanz: Verhindert das UI-Design durch seine Struktur bereits, dass Nutzer falsche Eingaben machen?
-
-Wissensmonopole: Was passiert mit dem Projekt, wenn der Hauptentwickler morgen kündigt (Bus-Faktor)?
-
-Feedback-Zyklus: Wie schnell fließt die Erkenntnis aus einer echten Nutzerinteraktion zurück in die Anforderungsliste?
