@@ -27,18 +27,18 @@ Wir verwenden ein einfaches, aber robustes Branching-Modell, um die Entwicklung 
 - **Start:** Ein neuer Feature-Branch wird immer vom aktuellen `develop`-Branch abgezweigt (`git switch -c feature/mein-feature`).
 - **Entwicklung:** Commits werden regelmäßig auf dem Feature-Branch gemacht.
 - **Abschluss:** Wenn das Feature fertig ist, wird der Feature-Branch in den develob Branch gemerged / rebased. Dazu:  
-  1. auf dem Aktuellen Feature branch alle änderungen des Develop Branches holen (Code Branch)
+  1. auf dem Aktuellen Feature branch alle änderungen des Develop Branches holen
       ```bash
       git checkout feature-branch
-      git pull origin Code
+      git pull origin develop
       ```
   2. Manuelles Lösen von eventuellen Merge Konfilikten. Diese Passieren auf dem Feature Branch und kolidieren somit nicht mit dem Entwicklungscode der Anwendung.
   3. Pushen des Konfiliktfreien Feature Branch
       ```bash
       git push origin feature-branch
       ```
-  4. Erstellen eines Pull Request in Github zum mergen des Feature Branches in den Entwicklungs (Code) Branch.
-  Source: feature-branch und Target: code
+  4. Erstellen eines Pull Request in Github zum mergen des Feature Branches in den Entwicklungs (develop) Branch.
+  Source: feature-branch und Target: develop
 
 ### Naming convention branches
 - feature/my_featur discription of feature that is implementet in this branch 

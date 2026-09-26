@@ -1,37 +1,41 @@
-# Architektur-Guide: Passkey-Login für Studenten-WebApp
+# Architektur-Guide: Login für Studenten-WebApp
+
+Verbindliche Entscheidungen stehen in `Decisions.md`. Dieses Dokument beschreibt die Abläufe.
 
 ## 1. Konzept & Flow
 
-Diese WebApp verzichtet vollständig auf Passwörter und E-Mail-Adressen. Die Identifikation erfolgt über Passkeys (WebAuthn), die Autorisierung über eindeutige Kurs-Codes.
+Die Identifikation erfolgt über eine bestätigte DHBW-E-Mail, die Autorisierung für einen Kurs über einen Kurs-Code. Login mit Passwort, optional mit Passkey (WebAuthn).
 
 ### Registrierungs-Flow
 
-1. Nutzer ruft Registrierungsseite auf.
-2. Nutzer gibt ein: `Anzeigename` (anonym) und `Kurs-Code` (z.B. `WS24-123`).
-3. Backend prüft: Existiert `Kurs-Code`? (Wenn nein -> Abbruch).
-4. Backend generiert `User_UUID` und sendet WebAuthn-Challenge ans Frontend.
-5. Nutzer bestätigt biometrisch (Gerät erstellt Passkey).
-6. Frontend sendet Public Key an Backend.
-7. Backend speichert Public Key verknüpft mit `User_UUID`.
-8. Backend trägt `User_UUID` in die Teilnehmerliste des Kurses ein.
+1. Nutzer gibt `E-Mail` und `Kurs-Code` (z.B. `WS24-123`) ein.
+2. Backend prüft die Domain der E-Mail gegen `ALLOWED_EMAIL_DOMAINS` (exakter Match) und ob der `Kurs-Code` existiert. Sonst Abbruch, es wird keine Mail gesendet.
+3. Backend sendet einen 6-stelligen E-Mail-Code (10 Minuten gültig, einmalig, 5 Fehlversuche).
+4. Nutzer gibt den Code ein und setzt ein Passwort (mindestens 10 Zeichen, Argon2id).
+5. Backend legt `User` an, trägt ihn in `course_members` ein und startet eine Session.
+6. Optional: Nutzer legt einen Passkey an.
 
 ### Login-Flow
 
-1. Nutzer klickt auf "Login".
-2. Backend sendet Challenge.
-3. Nutzer bestätigt per Biometrie/Geräte-PIN (inkl. Cross-Device via QR-Code möglich).
-4. Frontend sendet Signatur ans Backend.
-5. Backend verifiziert Signatur mit gespeichertem Public Key.
-6. Session wird gestartet (z.B. per JWT oder Session-Cookie).
+1. Nutzer gibt E-Mail und Passwort ein, oder wählt "Login mit Passkey".
+2. Backend verifiziert das Passwort (Argon2id) bzw. die WebAuthn-Signatur.
+3. Bei Erfolg wird eine serverseitige Session gestartet (`HttpOnly`-Cookie).
+4. Antworten sind unabhängig davon generisch, ob die E-Mail existiert.
+
+### Passwort-Reset
+
+1. Nutzer gibt die E-Mail ein, das Backend antwortet immer gleich.
+2. Existiert die E-Mail, wird ein E-Mail-Code gesendet.
+3. Nach korrektem Code setzt der Nutzer ein neues Passwort. Alle Sessions des Users werden widerrufen.
 
 ---
 
 ## 2. Benötigter Tech-Stack
 
-- **Kryptografie (Nicht selbst schreiben!):** \* _Node.js/TypeScript:_ `simplewebauthn` (Backend + Frontend-Pakete).
-  - _Python/Django:_ `webauthn`
-  - _Go:_ `go-webauthn`
-- **Datenbank:** Relationale DB (PostgreSQL) oder NoSQL, solange Relationen sauber abbildbar sind.
+- **Passwort:** `argon2` (Argon2id).
+- **Passkeys (Nicht selbst schreiben!):** `simplewebauthn` (Backend + Frontend-Pakete).
+- **Mail:** Transaktionaler Anbieter hinter `sendMail`.
+- **Datenbank:** PostgreSQL mit Drizzle ORM.
 
 ---
 
@@ -40,10 +44,16 @@ Diese WebApp verzichtet vollständig auf Passwörter und E-Mail-Adressen. Die Id
 ### Table: `users`
 
 - `id` (UUID, Primary Key)
-- `display_name` (String, z.B. "CodeNinja99")
+- `email` (String, Unique, lowercase)
+- `password_hash` (String)
+- `role` (`user` | `admin`)
 - `created_at` (Timestamp)
 
-### Table: `passkey_credentials`
+### Table: `email_codes`
+
+- `email`, `purpose` (`register` | `reset`), `code_hash`, `expires_at`, `attempts`, `created_at`
+
+### Table: `passkey_credentials` (optional)
 
 _(Ein User kann mehrere Geräte/Keys haben!)_
 
@@ -68,7 +78,7 @@ _(Ein User kann mehrere Geräte/Keys haben!)_
 
 ## 4. Wichtige Sicherheits- & UX-Regeln
 
-1.  **Rate Limiting:** Den Registrierungs-Endpunkt strikt limitieren (z.B. max 5 Versuche pro IP/Stunde), um Brute-Forcing von Kurs-Codes zu verhindern.
-2.  **User ID Buffer:** Die WebAuthn API verlangt die `user.id` als `Buffer` (bzw. `Uint8Array`). Niemals persönliche Daten wie E-Mails als ID verwenden (hier perfekt gelöst durch die anonyme UUID).
-3.  **Account Management:** Nach dem Login muss es eine Profilseite geben ("Meine Geräte"). Hier ruft der Nutzer erneut `navigator.credentials.create()` auf, um z.B. sein iPad zum selben Account (`user_id`) hinzuzufügen.
-4.  **Fallback / Recovery (Optional):** Da es keine E-Mail zum Zurücksetzen gibt, sollte beim Registrieren ein **einmaliger Recovery-Code** generiert werden (z.B. 16-stelliger String, gehasht in der DB gespeichert), den der Student sich ausdrucken/speichern muss, falls er sein Gerät verliert.
+1.  **Rate Limiting:** Send-Code-Endpunkt: 5 pro IP/Stunde plus Limit pro E-Mail (1 Code pro 60 Sekunden). Login: 5 Fehlversuche pro E-Mail, danach wachsende Verzögerung bis 15 Minuten, keine dauerhafte Sperre.
+2.  **User ID Buffer:** Die WebAuthn API verlangt die `user.id` als `Buffer` (bzw. `Uint8Array`). Niemals die E-Mail als WebAuthn-ID verwenden, sondern die UUID.
+3.  **Account Management:** Nach dem Login gibt es eine Profilseite ("Meine Geräte"), auf der optional weitere Passkeys hinzugefügt werden (`navigator.credentials.create()`).
+4.  **Recovery:** Läuft über den Passwort-Reset per E-Mail-Code. Ein separater Recovery-Code entfällt.

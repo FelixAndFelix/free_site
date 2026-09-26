@@ -1,0 +1,42 @@
+# Decisions
+
+Single source of truth for architecture and process decisions. If another planning document contradicts this file, this file wins.
+
+| Area | Decision | Reason |
+|---|---|---|
+| Auth | DHBW email verified by a 6-digit code, then a password. Passkey (WebAuthn via `simplewebauthn`) is an optional convenience. Course join code required at registration. | Email proves DHBW membership; the course code places the user in a course; passkeys add convenient login. |
+| Registration | Email + course code -> emailed code -> set password -> optionally add a passkey. One course per user in the MVP. | Simplest flow that gates on both domain and course. |
+| Login | Email + password, or passkey if set up. | Conventional model users expect. |
+| Password reset | Email code, then a new password. Revokes all sessions of that user. Replaces the former recovery code. | Email is the recovery path, so no recovery-code slice. |
+| Email storage | Plaintext `users.email`, unique, lowercased. | Needed to send mail on our own initiative. The privacy screen must state that the operator can link an email to a vote. |
+| Email domains | Env var `ALLOWED_EMAIL_DOMAINS`, exact domain match, checked before any mail is sent. | Proves DHBW membership and limits spam abuse. Exact campus domains are set in the deploy config. |
+| Email sending | Transactional provider (e.g. Resend or Brevo) with SPF, DKIM, DMARC on `felixkarg.de`, behind a single `sendMail` function. | Home-server mail is not deliverable to university addresses. Swappable provider. |
+| Email types | Transactional only in the MVP: verification code, reset code, optional "new passkey added" notice. Notifications with opt-in and unsubscribe are post-MVP. | No consent or queue work before shipping. |
+| Password | Argon2id, minimum 10 characters, no composition rules. | Current best practice, KISS. |
+| Email code | 6 digits from a CSPRNG, stored hashed, valid 10 minutes, single-use, 5 wrong attempts invalidate it, one new code per address per 60 seconds. | Bounded brute-force and resend abuse. |
+| Rate limits | Send-code: 5 per IP per hour plus a per-email limit. Login: 5 failures per email, then a growing delay of up to 15 minutes (no permanent lockout). | Prevents spam and brute force without letting an attacker lock out a victim. |
+| Anti-enumeration | Login and reset return the same generic response whether or not the email exists. | Does not leak who is registered. |
+| Vote link | `votes(user_id, modul_id, vote_value, updated_at)`, composite PK `(user_id, modul_id)`, changed via upsert. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
+| Vote values | Enum `free` / `possible` / `impossible` (UI: green / yellow / red). | Matches the app's purpose; a single enum column. |
+| Session | Server-side session stored in Postgres, opaque ID in an `HttpOnly; Secure; SameSite=Lax` cookie. | Not readable by XSS, revocable server-side. |
+| Admin | `ADMIN_SETUP_CODE` env var used at registration creates the first admin. `users.role` is `user` or `admin`. Admins can promote users. | Rotate the code after the first admin exists. The admin's email must still pass the domain check. |
+| Backend | Node.js, TypeScript, Express, Drizzle ORM, PostgreSQL. | Best `simplewebauthn` support; typed parameterized queries; readable SQL migrations. |
+| Frontend | Vite, React, TypeScript, React Router, plain mobile-first CSS. | Small app (4 screens); matches `DevelopingRules.md`. Screens are designed fresh later; the old Stitch prototype is discarded. |
+| Repo | npm workspaces monorepo: `frontend/`, `backend/`, `shared/`, plus `docker-compose.yml`. Each package has its own Dockerfile. | One PR flow and CI; shared API types and vote enum avoid drift. |
+| Testing | Vitest everywhere, Testing Library for React, real-Postgres integration tests, WebAuthn and mail sending mocked at their boundaries, TDD per slice. No E2E in the MVP. | Upsert and constraint logic is where bugs live. |
+| Hosting | Own homeserver, Docker Compose, Cloudflare Tunnel, GitHub Actions self-hosted runner. | Outbound-only tunnel hides the home IP; matches the deploy plan. |
+| Domain | `free.felixkarg.de`, also the WebAuthn `rpID`. | Passkeys are bound to it. It must not change once users register. |
+| Git | `main` = production, `develop` = integration, `feature/*` branches. Merging `develop` into `main` deploys. | Follows `DevelopingRules.md`. |
+
+## Build order
+
+1. Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres, `cloudflared`), `/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de`.
+2. Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
+3. Admin bootstrap; create courses and modules.
+4. Voting (upsert) and overview with bar chart.
+5. Detail view and privacy info screen.
+6. Optional passkeys and "My devices".
+
+## Post-MVP
+
+Comments, long-term vote graphs, profile settings, "my modules" list, email notifications with opt-in and unsubscribe, joining several courses.
