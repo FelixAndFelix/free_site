@@ -16,7 +16,7 @@ export function LoginPage() {
   /** Logs in and opens the home screen on success. */
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const result = await apiRequest<UserResponse>("/api/auth/login", { email, password });
+    const result = await apiRequest<UserResponse>("/api/auth/login", { body: { email, password } });
     if (!result.ok) return setError(errorMessage(result.error));
     setUser(result.data.user);
     navigate("/");

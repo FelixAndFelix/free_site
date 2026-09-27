@@ -21,6 +21,8 @@ export interface AuthUser {
 export interface RegisterStartRequest {
   email: string;
   courseCode: string;
+  /** Only for the first admin; must match ADMIN_SETUP_CODE while no admin exists. */
+  adminSetupCode?: string;
 }
 
 /** Body of POST /api/auth/register/complete. */
@@ -29,6 +31,12 @@ export interface RegisterCompleteRequest {
   courseCode: string;
   code: string;
   password: string;
+  adminSetupCode?: string;
+}
+
+/** Body of POST /api/auth/claim-admin. */
+export interface ClaimAdminRequest {
+  adminSetupCode: string;
 }
 
 /** Body of POST /api/auth/login. */
@@ -64,9 +72,82 @@ export type ApiErrorCode =
   | "invalid_credentials"
   | "unauthenticated"
   | "rate_limited"
+  | "invalid_setup_code"
+  | "forbidden"
+  | "not_found"
+  | "course_exists"
+  | "cannot_change_own_role"
   | "internal_error";
 
 /** Body of every error response. */
 export interface ApiError {
   error: ApiErrorCode;
+}
+
+export const MAX_SEMESTER = 6;
+export const NAME_MAX_LENGTH = 100;
+
+/** A course as shown to admins, including its secret join code. */
+export interface AdminCourse {
+  id: string;
+  name: string;
+  joinCode: string;
+  memberCount: number;
+  moduleCount: number;
+}
+
+/** A module (lecture) of a course. */
+export interface Module {
+  id: string;
+  courseId: string;
+  name: string;
+  semester: number;
+}
+
+/** A user as listed for admins. */
+export interface AdminUserEntry {
+  id: string;
+  email: string;
+  role: UserRole;
+  courseName: string | null;
+}
+
+/** Body of POST /api/admin/courses. */
+export interface CreateCourseRequest {
+  name: string;
+}
+
+/** Body of POST /api/admin/courses/:courseId/modules. */
+export interface CreateModuleRequest {
+  name: string;
+  semester: number;
+}
+
+/** Body of PATCH /api/admin/users/:userId. */
+export interface UpdateUserRoleRequest {
+  role: UserRole;
+}
+
+export interface CoursesResponse {
+  courses: AdminCourse[];
+}
+
+export interface CourseResponse {
+  course: AdminCourse;
+}
+
+export interface ModulesResponse {
+  modules: Module[];
+}
+
+export interface ModuleResponse {
+  module: Module;
+}
+
+export interface UsersResponse {
+  users: AdminUserEntry[];
+}
+
+export interface UserEntryResponse {
+  user: AdminUserEntry;
 }

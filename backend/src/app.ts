@@ -5,6 +5,7 @@ import type { ApiError, HealthResponse } from "@free-site/shared";
 interface AppDependencies {
   checkDatabase: () => Promise<boolean>;
   authRouter: Router;
+  adminRouter: Router;
   trustProxy?: string;
 }
 
@@ -12,7 +13,7 @@ interface AppDependencies {
  * Builds the Express app with its dependencies injected.
  * @param {AppDependencies} dependencies
  */
-export function createApp({ checkDatabase, authRouter, trustProxy }: AppDependencies) {
+export function createApp({ checkDatabase, authRouter, adminRouter, trustProxy }: AppDependencies) {
   const app = express();
   if (trustProxy) app.set("trust proxy", trustProxy);
   app.use(express.json({ limit: "10kb" }));
@@ -25,6 +26,7 @@ export function createApp({ checkDatabase, authRouter, trustProxy }: AppDependen
   });
 
   app.use("/api/auth", authRouter);
+  app.use("/api/admin", adminRouter);
   app.use(handleError);
 
   return app;

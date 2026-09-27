@@ -19,7 +19,7 @@ Single source of truth for architecture and process decisions. If another planni
 | Vote link | `votes(user_id, modul_id, vote_value, updated_at)`, composite PK `(user_id, modul_id)`, changed via upsert. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
 | Vote values | Enum `free` / `possible` / `impossible` (UI: green / yellow / red). | Matches the app's purpose; a single enum column. |
 | Session | Server-side session stored in Postgres, opaque ID in an `HttpOnly; Secure; SameSite=Lax` cookie. | Not readable by XSS, revocable server-side. |
-| Admin | `ADMIN_SETUP_CODE` env var used at registration creates the first admin. `users.role` is `user` or `admin`. Admins can promote users. | Rotate the code after the first admin exists. The admin's email must still pass the domain check. |
+| Admin | `ADMIN_SETUP_CODE` env var used at registration creates the first admin; it is accepted only while no admin exists. `users.role` is `user` or `admin`. Admins can promote and demote others, never themselves. | The code cannot mint a second admin even if it leaks, so rotating it is optional. The admin's email must still pass the domain check, and a course code is still required. |
 | Backend | Node.js, TypeScript, Express, Drizzle ORM, PostgreSQL. | Best `simplewebauthn` support; typed parameterized queries; readable SQL migrations. |
 | Frontend | Vite, React, TypeScript, React Router, plain mobile-first CSS. | Small app (4 screens); matches `DevelopingRules.md`. Screens are designed fresh later; the old Stitch prototype is discarded. |
 | Repo | npm workspaces monorepo: `frontend/`, `backend/`, `shared/`, plus `docker-compose.yml`. Each package has its own Dockerfile. | One PR flow and CI; shared API types and vote enum avoid drift. |
@@ -31,8 +31,8 @@ Single source of truth for architecture and process decisions. If another planni
 ## Build order
 
 1. ✅ Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres), `/api/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de` via the existing reverse proxy.
-2. Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
-3. Admin bootstrap; create courses and modules.
+2. ✅ Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
+3. ✅ Admin bootstrap (`ADMIN_SETUP_CODE`, `/claim-admin`); create courses, join codes and modules on `/admin`.
 4. Voting (upsert) and overview with bar chart.
 5. Detail view and privacy info screen.
 6. Optional passkeys and "My devices".

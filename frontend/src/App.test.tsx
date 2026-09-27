@@ -1,48 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "./App";
-import { AuthProvider } from "./auth";
-
-type Reply = { status: number; body?: object };
+import { mockApi, renderAt, type } from "./testUtils";
 
 const USER = { id: "1", email: "student@dhbw.example", role: "user" };
-
-/**
- * Replaces fetch with fixed replies per "METHOD path"; unlisted requests answer 401.
- * @param {Record<string, Reply>} replies
- */
-function mockApi(replies: Record<string, Reply>) {
-  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
-    const { status, body = {} } = replies[`${init?.method ?? "GET"} ${path}`] ?? { status: 401, body: { error: "unauthenticated" } };
-    return { ok: status < 400, status, json: async () => body };
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-/**
- * Renders the app at a path.
- * @param {string} path
- */
-function renderAt(path: string) {
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </MemoryRouter>,
-  );
-}
-
-/**
- * Types a value into the input with the given label.
- * @param {RegExp} label
- * @param {string} value
- */
-function type(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
-}
 
 describe("App", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -117,6 +77,43 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Please use your DHBW email address.");
+  });
+
+  it("sends the admin setup code only when it is given", async () => {
+    const fetchMock = mockApi({ "POST /api/auth/register/start": { status: 202 } });
+    renderAt("/register");
+
+    await screen.findByRole("heading", { name: "Create an account" });
+    type(/DHBW email/, USER.email);
+    type(/Course code/, "INF24B-7KQ2XMPA");
+    fireEvent.click(screen.getByText("I have an admin setup code"));
+    type(/Admin setup code/, "the-setup-code");
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+
+    await screen.findByRole("heading", { name: "Check your email" });
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toMatchObject({ adminSetupCode: "the-setup-code" });
+  });
+
+  it("lets a logged-in user claim admin with the setup code", async () => {
+    mockApi({
+      "GET /api/auth/me": { status: 200, body: { user: USER } },
+      "POST /api/auth/claim-admin": { status: 200, body: { user: { ...USER, role: "admin" } } },
+      "GET /api/admin/courses": { status: 200, body: { courses: [] } },
+      "GET /api/admin/users": { status: 200, body: { users: [] } },
+    });
+    renderAt("/claim-admin");
+
+    await screen.findByLabelText(/Admin setup code/);
+    type(/Admin setup code/, "the-setup-code");
+    fireEvent.click(screen.getByRole("button", { name: "Become admin" }));
+
+    expect(await screen.findByRole("heading", { name: "Admin" })).toBeInTheDocument();
+  });
+
+  it("links admins to the admin page", async () => {
+    mockApi({ "GET /api/auth/me": { status: 200, body: { user: { ...USER, role: "admin" } } } });
+    renderAt("/");
+    expect(await screen.findByRole("link", { name: /Admin/ })).toHaveAttribute("href", "/admin");
   });
 
   it("resets the password in two steps", async () => {

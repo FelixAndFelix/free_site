@@ -12,6 +12,7 @@ export function RegisterPage() {
   const [step, setStep] = useState<"details" | "verify">("details");
   const [email, setEmail] = useState("");
   const [courseCode, setCourseCode] = useState("");
+  const [adminSetupCode, setAdminSetupCode] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -19,7 +20,7 @@ export function RegisterPage() {
   /** Asks the backend to email a verification code. */
   async function requestCode(event?: FormEvent) {
     event?.preventDefault();
-    const result = await apiRequest("/api/auth/register/start", { email, courseCode });
+    const result = await apiRequest("/api/auth/register/start", { body: { email, courseCode, adminSetupCode } });
     if (!result.ok) return setError(errorMessage(result.error));
     setError("");
     setStep("verify");
@@ -28,7 +29,9 @@ export function RegisterPage() {
   /** Creates the account and opens the home screen on success. */
   async function complete(event: FormEvent) {
     event.preventDefault();
-    const result = await apiRequest<UserResponse>("/api/auth/register/complete", { email, courseCode, code, password });
+    const result = await apiRequest<UserResponse>("/api/auth/register/complete", {
+      body: { email, courseCode, code, password, adminSetupCode },
+    });
     if (!result.ok) return setError(errorMessage(result.error));
     setUser(result.data.user);
     navigate("/");
@@ -39,7 +42,11 @@ export function RegisterPage() {
       <form className="card" onSubmit={requestCode}>
         <h1>Create an account</h1>
         <Field label="DHBW email" type="email" autoComplete="email" value={email} onValue={setEmail} />
-        <Field label="Course code" placeholder="WS24-123" value={courseCode} onValue={setCourseCode} />
+        <Field label="Course code" placeholder="INF24B-7KQ2XMPA" value={courseCode} onValue={setCourseCode} />
+        <details>
+          <summary>I have an admin setup code</summary>
+          <Field label="Admin setup code" required={false} value={adminSetupCode} onValue={setAdminSetupCode} />
+        </details>
         {error && <p role="alert">{error}</p>}
         <button type="submit">Send code</button>
         <p>

@@ -38,7 +38,7 @@ docker compose up -d --build
 
 The app is then at http://localhost:8080, proxying `/api` to the backend.
 
-To register locally, set `ALLOWED_EMAIL_DOMAINS` in `.env` and use the course code `INF24B-local`. Without `RESEND_API_KEY`, the emailed codes are printed to the backend log (`docker compose logs backend`).
+To register locally, set `ALLOWED_EMAIL_DOMAINS` in `.env` and use the course code `INF24B-local` (and the admin setup code `admin-local` for the first account to become admin). Without `RESEND_API_KEY`, the emailed codes are printed to the backend log (`docker compose logs backend`).
 
 ## Deployment
 
