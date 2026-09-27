@@ -4,6 +4,8 @@ services:
     environment:
       # Without RESEND_API_KEY, mails (and their codes) are printed to the backend log.
       NODE_ENV: development
+      # Local only; production sets a long random code in the server env file.
+      INITIAL_COURSE_JOIN_CODE: INF24B-local
 
   frontend:
     ports:

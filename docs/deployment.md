@@ -13,6 +13,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    ALLOWED_EMAIL_DOMAINS=<campus domains, comma-separated>
    RESEND_API_KEY=<from Resend>
    MAIL_FROM=free_site <no-reply@felixkarg.de>
+   INITIAL_COURSE_JOIN_CODE=<long random, e.g. INF24B-$(openssl rand -hex 4)>
    ```
    Pick a free port (`ss -tlnp`). The backend refuses to start in production without `RESEND_API_KEY`.
    Optional: `TRUST_PROXY` (default `loopback, linklocal, uniquelocal`) decides which proxy hops are trusted when reading the client IP for rate limits. The default fits a chain of LAN/Docker proxies; change it only if the rate limit sees your proxy's address instead of the client's.
@@ -29,5 +30,5 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
 - The first deploy creates the `free-site_database_data` volume. Back it up before schema work starts.
 - Database migrations run automatically when the backend starts. After a schema change in `backend/src/schema.ts`, run `npm run db:generate -w backend` and commit the new file in `backend/drizzle/`.
 - Local development: `docker compose up` loads `docker-compose.override.yml` and serves on http://localhost:8080. Without `RESEND_API_KEY`, mails (and their codes) are printed to the backend log.
-- Registration needs an existing course code. Until the admin screens exist (build step 3), create a course by hand: `insert into courses (name, join_code) values ('<name>', '<long random code>');`
+- Registration needs a course code. On start the backend creates the course `INF24B` with `INITIAL_COURSE_JOIN_CODE` if no course of that name exists; hand that code to your fellow students. Changing the env value later does not change an existing course (rotation comes with the admin screens in build step 3). Locally the code is `INF24B-local`.
 - Keep host names, LAN addresses, usernames and file paths for your infrastructure out of this repo (it is public); they belong only in the server's env file and your own notes.

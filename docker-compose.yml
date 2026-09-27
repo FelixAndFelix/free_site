@@ -23,6 +23,7 @@ services:
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-free_site <no-reply@felixkarg.de>}
+      INITIAL_COURSE_JOIN_CODE: ${INITIAL_COURSE_JOIN_CODE:-}
     depends_on:
       database:
         condition: service_healthy

@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { createAuthRouter } from "./auth/routes";
 import { loadConfig } from "./config";
+import { ensureCourse } from "./courses";
 import { createDatabase } from "./database";
 import { createSendMail } from "./mail";
 
@@ -9,6 +10,10 @@ if (config.allowedEmailDomains.length === 0) console.warn("ALLOWED_EMAIL_DOMAINS
 
 const database = createDatabase(config.databaseUrl);
 await database.runMigrations();
+if (config.initialCourseJoinCode) {
+  const created = await ensureCourse(database.db, config.initialCourseName, config.initialCourseJoinCode);
+  if (created) console.log(`created course ${config.initialCourseName}`);
+}
 
 const authRouter = createAuthRouter({
   db: database.db,
