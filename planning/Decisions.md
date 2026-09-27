@@ -17,8 +17,8 @@ Single source of truth for architecture and process decisions. If another planni
 | Email code | 6 digits from a CSPRNG, stored hashed, valid 10 minutes, single-use, 5 wrong attempts invalidate it, one new code per address per 60 seconds. | Bounded brute-force and resend abuse. |
 | Rate limits | Send-code: 5 per IP per hour plus a per-email limit. Login: 5 failures per email, then a growing delay of up to 15 minutes (no permanent lockout). | Prevents spam and brute force without letting an attacker lock out a victim. |
 | Anti-enumeration | Login and reset return the same generic response whether or not the email exists. | Does not leak who is registered. |
-| Vote link | `votes(user_id, modul_id, vote_value, updated_at)`, composite PK `(user_id, modul_id)`, changed via upsert. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
-| Vote values | Enum `free` / `possible` / `impossible` (UI: green / yellow / red). | Matches the app's purpose; a single enum column. |
+| Vote link | `votes(user_id, module_id, vote_value, updated_at)`, composite PK `(user_id, module_id)`, changed via upsert. Users vote only on modules of their own course (others answer 404); clicking the current vote again withdraws it. Deleting a module or user deletes its votes. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
+| Vote values | Enum `free` / `possible` / `impossible` (UI: green `#15803d` / amber `#e0a100` / red `#dc2626`, checked with a color-vision validator; every bar carries text labels and counts so it never relies on color alone). | Matches the app's purpose; a single enum column. |
 | Session | Server-side session stored in Postgres, opaque ID in an `HttpOnly; Secure; SameSite=Lax` cookie. | Not readable by XSS, revocable server-side. |
 | Course management | Admins are global: every admin manages all courses, modules, join codes and users. Admins create and delete courses and modules, rotate join codes, and move a user to another course or remove them from their course. A course can only be deleted when it has no members; its modules go with it. | Deleting an empty course cannot remove accounts by accident. Global admins fit a small app run by a few trusted people. |
 | Admin | `ADMIN_SETUP_CODE` env var used at registration creates the first admin; it is accepted only while no admin exists. `users.role` is `user` or `admin`. Admins can promote and demote others, never themselves. | The code cannot mint a second admin even if it leaks, so rotating it is optional. The admin's email must still pass the domain check, and a course code is still required. |
@@ -35,7 +35,7 @@ Single source of truth for architecture and process decisions. If another planni
 1. ✅ Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres), `/api/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de` via the existing reverse proxy.
 2. ✅ Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
 3. ✅ Admin bootstrap (`ADMIN_SETUP_CODE`, `/claim-admin`); create courses, join codes and modules on `/admin`.
-4. Voting (upsert) and overview with bar chart.
+4. ✅ Voting (upsert) and overview with bar chart: the home screen lists the modules of the user's course by semester, each with a stacked bar of the vote shares and three vote buttons.
 5. Detail view and privacy info screen.
 6. Optional passkeys and "My devices".
 

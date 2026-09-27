@@ -175,3 +175,34 @@ export interface UsersResponse {
 export interface UserEntryResponse {
   user: AdminUserEntry;
 }
+
+/** Vote values in scale order; the UI shows them as green, yellow and red. */
+export const VOTE_VALUES = ["free", "possible", "impossible"] as const;
+export type VoteValue = (typeof VOTE_VALUES)[number];
+
+export type VoteCounts = Record<VoteValue, number>;
+
+/** A module in the voting overview: vote counts of the course plus the current user's vote. */
+export interface ModuleOverview {
+  id: string;
+  name: string;
+  semester: number;
+  counts: VoteCounts;
+  myVote: VoteValue | null;
+}
+
+/** Response body of GET /api/overview; course is null for users who are in no course. */
+export interface OverviewResponse {
+  course: { id: string; name: string } | null;
+  modules: ModuleOverview[];
+}
+
+/** Body of PUT /api/modules/:moduleId/vote. */
+export interface VoteRequest {
+  value: VoteValue;
+}
+
+/** Response body of the vote endpoints. */
+export interface ModuleOverviewResponse {
+  module: ModuleOverview;
+}

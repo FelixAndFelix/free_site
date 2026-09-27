@@ -6,6 +6,7 @@ import { createAuthRouter } from "./auth/routes";
 import type { Db } from "./database";
 import type { Mail } from "./mail";
 import { courses } from "./schema";
+import { createVotingRouter } from "./voting/routes";
 
 export const TEST_PASSWORD = "correct horse battery";
 export const TEST_COURSE_CODE = "WS24-123";
@@ -35,7 +36,8 @@ export function createTestApp({ db, sentMails, now }: { db: Db; sentMails: Mail[
     now,
   });
   const adminRouter = createAdminRouter({ db, now });
-  return createApp({ checkDatabase: async () => true, authRouter, adminRouter, trustProxy: "loopback" });
+  const votingRouter = createVotingRouter({ db, now });
+  return createApp({ checkDatabase: async () => true, authRouter, adminRouter, votingRouter, trustProxy: "loopback" });
 }
 
 /**

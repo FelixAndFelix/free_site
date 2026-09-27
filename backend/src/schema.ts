@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { USER_ROLES } from "@free-site/shared";
+import { USER_ROLES, VOTE_VALUES } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
+export const voteValue = pgEnum("vote_value", VOTE_VALUES);
 export const emailCodePurpose = pgEnum("email_code_purpose", ["register", "reset"]);
 
 // username is nullable only for accounts created before usernames existed; they choose one after login.
@@ -73,4 +74,21 @@ export const modules = pgTable(
     semester: integer("semester").notNull(),
   },
   (table) => [index("modules_course_id_idx").on(table.courseId)],
+);
+
+// One vote per user and module, changed by upsert. Votes are linked to user_id and therefore
+// not anonymous towards the operator (see the privacy notes in planning/Decisions.md).
+export const votes = pgTable(
+  "votes",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
+    value: voteValue("vote_value").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("votes_module_id_idx").on(table.moduleId)],
 );
