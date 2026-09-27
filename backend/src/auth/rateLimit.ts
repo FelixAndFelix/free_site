@@ -22,7 +22,13 @@ export function createWindowLimiter({ limit, windowMs, now }: { limit: number; w
     return entry.count <= limit;
   }
 
-  return { hit };
+  /** True if the key has used up its limit in the current window, without recording a hit. */
+  function isLimited(key: string): boolean {
+    const entry = windows.get(key);
+    return entry !== undefined && now().getTime() - entry.startedAt < windowMs && entry.count >= limit;
+  }
+
+  return { hit, isLimited };
 }
 
 const FREE_FAILURES = 5;
