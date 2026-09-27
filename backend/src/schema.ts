@@ -92,3 +92,20 @@ export const votes = pgTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("votes_module_id_idx").on(table.moduleId)],
 );
+
+// Append-only history of vote changes for the graphs over time. It stores no user id, so the
+// history cannot be linked to a person and stays intact when an account is deleted.
+// fromValue null = a new vote, toValue null = a withdrawn vote.
+export const voteChanges = pgTable(
+  "vote_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
+    fromValue: voteValue("from_value"),
+    toValue: voteValue("to_value"),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("vote_changes_module_id_changed_at_idx").on(table.moduleId, table.changedAt)],
+);

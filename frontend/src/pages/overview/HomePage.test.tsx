@@ -90,6 +90,13 @@ describe("HomePage overview", () => {
     expect(sentBodies(fetchMock, "DELETE", "/api/modules/m2/vote")).toHaveLength(1);
   });
 
+  it("links each module to its history", async () => {
+    mockOverview([MATHE]);
+    renderAt("/");
+
+    expect(await screen.findByRole("link", { name: "Mathematik I" })).toHaveAttribute("href", "/modules/m1");
+  });
+
   it("tells a user without a course what to do", async () => {
     mockApi({
       "GET /api/auth/me": { status: 200, body: { user: USER } },

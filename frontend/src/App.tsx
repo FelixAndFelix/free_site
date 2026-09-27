@@ -5,6 +5,7 @@ import { AdminPage } from "./pages/admin/AdminPage";
 import { ClaimAdminPage } from "./pages/ClaimAdminPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { ModulePage } from "./pages/module/ModulePage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPage } from "./pages/ResetPage";
 import { UsernamePage } from "./pages/UsernamePage";
@@ -33,6 +34,7 @@ export function App() {
     <main className="container">
       <Routes>
         <Route path="/" element={<RequireAccess access="user"><HomePage /></RequireAccess>} />
+        <Route path="/modules/:moduleId" element={<RequireAccess access="user"><ModulePage /></RequireAccess>} />
         <Route path="/admin" element={<RequireAccess access="admin"><AdminPage /></RequireAccess>} />
         <Route path="/username" element={<RequireAccess access="user"><UsernamePage /></RequireAccess>} />
         <Route path="/claim-admin" element={<RequireAccess access="user"><ClaimAdminPage /></RequireAccess>} />

@@ -206,3 +206,15 @@ export interface VoteRequest {
 export interface ModuleOverviewResponse {
   module: ModuleOverview;
 }
+
+/** Vote counts at the end of one calendar day (Europe/Berlin), YYYY-MM-DD. */
+export interface VoteHistoryDay {
+  day: string;
+  counts: VoteCounts;
+}
+
+/** Response body of GET /api/modules/:moduleId: the module and its daily vote history. */
+export interface ModuleDetailResponse {
+  module: ModuleOverview;
+  history: VoteHistoryDay[];
+}
