@@ -44,6 +44,7 @@ export function createTestApp({
     secureCookies: false,
     appUrl: "https://free.example",
     adminSetupCode: TEST_SETUP_CODE,
+    onAccountDeleted: events.userLeftCourse,
     now,
   });
   const adminRouter = createAdminRouter({ db, events, now });

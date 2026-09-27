@@ -52,6 +52,9 @@ export function RegisterPage() {
           <Field label="Admin setup code" required={false} value={adminSetupCode} onValue={setAdminSetupCode} />
         </details>
         {error && <p role="alert">{error}</p>}
+        <p className="muted">
+          Other users only see vote totals. <Link to="/privacy">How your data is handled</Link>
+        </p>
         <button type="submit">Send code</button>
         <p>
           <Link to="/login">I already have an account</Link>

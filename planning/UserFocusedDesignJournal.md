@@ -172,7 +172,8 @@ Folgende Features nach der Erstimplementierung / Deployment:
 - Sind diese Daten personenbezogen und wie gehe ich damit um?
   - Ja. Die E-Mail ist personenbezogen, und Votes sind für den Betreiber damit einer Person zuordenbar. Das wird im Datenschutz-Screen offen benannt. Es werden nur transaktionale Mails versendet (Codes, ggf. Hinweis auf neuen Passkey).
 - Wie kann ich das "Recht auf Vergessenwerden" auf den technischen Komponenten umsetzen?
-  - Ein User kann seinen Account samt E-Mail, Passkeys und Votes löschen (`ON DELETE CASCADE` auf `user_id`).
+  - Ein User kann seinen Account unter "Account" samt E-Mail, Username, Passkeys und Votes löschen (Bestätigung per Passwort, `ON DELETE CASCADE` auf `user_id`). Die Stimmen werden vorher regulär zurückgezogen, damit der anonyme Verlauf zu den Summen passt; der Verlauf selbst bleibt, weil er keiner Person zugeordnet ist.
+  - Abgelaufene E-Mail-Codes und Sessions werden stündlich gelöscht.
 
 - Welche Rollen gibt es?
   - User
