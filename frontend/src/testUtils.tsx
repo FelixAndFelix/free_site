@@ -56,3 +56,11 @@ export function renderAt(path: string) {
 export function type(label: RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
+
+/**
+ * Waits for the home screen line "Logged in as <username>", which spans several elements.
+ * @param {string} username
+ */
+export function findLoggedInAs(username: string) {
+  return screen.findByText((_, element) => element?.tagName === "P" && element.textContent?.startsWith(`Logged in as ${username}`) === true);
+}

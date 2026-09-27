@@ -48,7 +48,7 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
       expect(course.joinCode).toMatch(/^INF24B-[A-Z2-9]{8}$/);
       await request(app)
         .post("/api/auth/register/start")
-        .send({ email: "new@dhbw.example", courseCode: course.joinCode })
+        .send({ email: "new@dhbw.example", username: "student", courseCode: course.joinCode })
         .expect(202);
     });
 
@@ -82,7 +82,7 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
       expect(response.body.course.joinCode).not.toBe(course.joinCode);
       const oldCode = await request(app)
         .post("/api/auth/register/start")
-        .send({ email: "new@dhbw.example", courseCode: course.joinCode });
+        .send({ email: "new@dhbw.example", username: "student", courseCode: course.joinCode });
       expect(oldCode.body).toEqual({ error: "invalid_course_code" });
     });
 

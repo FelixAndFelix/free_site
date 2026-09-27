@@ -39,7 +39,7 @@ export async function createSession(db: Db, userId: string, now: Date): Promise<
  */
 export async function findSessionUser(db: Db, token: string, now: Date): Promise<AuthUser | null> {
   const [user] = await db
-    .select({ id: users.id, email: users.email, role: users.role })
+    .select({ id: users.id, email: users.email, username: users.username, role: users.role })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.id, sessionId(token)), gt(sessions.expiresAt, now)));

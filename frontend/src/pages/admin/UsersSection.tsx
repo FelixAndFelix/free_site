@@ -53,7 +53,7 @@ export function UsersSection({ courses, onChanged }: UsersSectionProps) {
         {users.map((user) => (
           <li key={user.id}>
             <span>
-              {user.email}
+              <strong>{user.username ?? "(no username yet)"}</strong> {user.email}
               {user.role === "admin" && <span className="muted"> · admin</span>}
             </span>
             <div className="actions">

@@ -18,7 +18,7 @@ import {
 } from "@free-site/shared";
 import { requireRole } from "../auth/middleware";
 import { generateJoinCode } from "../courses";
-import type { Db } from "../database";
+import { isUniqueViolation, type Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, users } from "../schema";
 
@@ -26,8 +26,6 @@ export interface AdminDependencies {
   db: Db;
   now?: () => Date;
 }
-
-const UNIQUE_VIOLATION = "23505";
 
 /**
  * Trims a name and returns it if it is 1 to NAME_MAX_LENGTH characters long, otherwise null.
@@ -37,15 +35,6 @@ function readName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const name = value.trim();
   return name.length > 0 && name.length <= NAME_MAX_LENGTH ? name : null;
-}
-
-/**
- * True if the error is Postgres' unique constraint violation (possibly wrapped by Drizzle).
- * @param {unknown} error
- */
-function isUniqueViolation(error: unknown): boolean {
-  const { code, cause } = error as { code?: string; cause?: { code?: string } };
-  return code === UNIQUE_VIOLATION || cause?.code === UNIQUE_VIOLATION;
 }
 
 /**
@@ -68,6 +57,7 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
   const userColumns = {
     id: users.id,
     email: users.email,
+    username: users.username,
     role: users.role,
     courseId: courses.id,
     courseName: courses.name,

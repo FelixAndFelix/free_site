@@ -8,7 +8,9 @@ export function HomePage() {
   return (
     <div className="card">
       <h1>free_site</h1>
-      <p>Logged in as {user?.email}</p>
+      <p>
+        Logged in as <strong>{user?.username}</strong> · <Link to="/username">Change username</Link>
+      </p>
       {user?.role === "admin" && <Link to="/admin">Admin: courses, modules and users</Link>}
       <button type="button" className="secondary" onClick={logout}>
         Log out
