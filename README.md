@@ -11,6 +11,8 @@ Live at [free.felixkarg.de](https://free.felixkarg.de).
 - [`planning/DevelopingRules.md`](planning/DevelopingRules.md) — commit, branching and code-style conventions
 - [`docs/deployment.md`](docs/deployment.md) — one-time production deploy setup
 
+Privacy information for users is on [free.felixkarg.de/privacy](https://free.felixkarg.de/privacy); security reports go to the contact in [`security.txt`](https://free.felixkarg.de/.well-known/security.txt).
+
 ## Structure
 
 npm workspaces monorepo:
