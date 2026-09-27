@@ -35,7 +35,14 @@ export interface AuthDependencies {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
 const SEND_CODE_LIMIT_PER_IP = 5;
+// Caps the mails one address can receive, even from many IPs (at most one per minute anyway).
+const CODE_MAILS_PER_ADDRESS_PER_HOUR = 5;
+// Password spraying tries one password on many accounts, which the per-email throttle cannot see.
+const FAILED_LOGINS_PER_IP = 20;
+const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const USERNAME_CHANGES_PER_DAY = 10;
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /**
  * Trims a username and returns it if it matches the username rules, otherwise null.
@@ -74,6 +81,21 @@ export function createAuthRouter({
   const sendCodeLimiter = createWindowLimiter({ limit: SEND_CODE_LIMIT_PER_IP, windowMs: HOUR_MS, now });
   const setupCodeLimiter = createWindowLimiter({ limit: SEND_CODE_LIMIT_PER_IP, windowMs: HOUR_MS, now });
   const loginThrottle = createLoginThrottle(now);
+  const codeMailsPerAddress = createWindowLimiter({ limit: CODE_MAILS_PER_ADDRESS_PER_HOUR, windowMs: HOUR_MS, now });
+  const failedLoginsPerIp = createWindowLimiter({ limit: FAILED_LOGINS_PER_IP, windowMs: FAILED_LOGIN_WINDOW_MS, now });
+  const usernameChanges = createWindowLimiter({ limit: USERNAME_CHANGES_PER_DAY, windowMs: DAY_MS, now });
+
+  /**
+   * Issues a code and mails it, unless the address already got a code this minute or its hourly
+   * maximum. Callers answer the same either way, so the response never reveals which case applied.
+   */
+  async function sendCodeMail(email: string, purpose: "register" | "reset") {
+    if (codeMailsPerAddress.isLimited(email)) return;
+    const code = await issueEmailCode(db, email, purpose, now());
+    if (!code) return;
+    codeMailsPerAddress.hit(email);
+    await sendMail(buildCodeMail({ to: email, purpose, code, appUrl, instanceLabel }));
+  }
 
   /** True if the domain after the last @ is exactly one of the allowed domains. */
   function isAllowedDomain(email: string): boolean {
@@ -147,12 +169,7 @@ export function createAuthRouter({
     }
 
     // Registered addresses get the same answer but no mail, so this does not reveal accounts.
-    if (!(await findUserByEmail(email))) {
-      const code = await issueEmailCode(db, email, "register", now());
-      if (code) {
-        await sendMail(buildCodeMail({ to: email, purpose: "register", code, appUrl, instanceLabel }));
-      }
-    }
+    if (!(await findUserByEmail(email))) await sendCodeMail(email, "register");
     response.status(202).json({});
   });
 
@@ -197,11 +214,13 @@ export function createAuthRouter({
     if (!fields) return sendError(response, 400, "invalid_request");
     const email = normalizeEmail(fields.email);
     if (!email) return sendError(response, 401, "invalid_credentials");
-    if (loginThrottle.isBlocked(email)) return sendError(response, 429, "rate_limited");
+    const ip = request.ip ?? "unknown";
+    if (loginThrottle.isBlocked(email) || failedLoginsPerIp.isLimited(ip)) return sendError(response, 429, "rate_limited");
 
     const user = await findUserByEmail(email);
     if (!(await verifyPassword(user?.passwordHash, fields.password)) || !user) {
       loginThrottle.recordFailure(email);
+      failedLoginsPerIp.hit(ip);
       return sendError(response, 401, "invalid_credentials");
     }
     loginThrottle.reset(email);
@@ -218,6 +237,8 @@ export function createAuthRouter({
     const username = normalizeUsername(fields.username);
     if (!username) return sendError(response, 400, "invalid_username");
     if (await isUsernameTaken(username, user.id)) return sendError(response, 409, "username_taken");
+    // Stops a script from cycling through names (e.g. to impersonate others one after another).
+    if (!usernameChanges.hit(user.id)) return sendError(response, 429, "rate_limited");
     try {
       await db.update(users).set({ username }).where(eq(users.id, user.id));
     } catch (error) {
@@ -284,11 +305,8 @@ export function createAuthRouter({
     if (!email) return sendError(response, 400, "invalid_email");
 
     if (await findUserByEmail(email)) {
-      const code = await issueEmailCode(db, email, "reset", now());
-      if (code) {
-        // A failed send is logged, not returned, so the response never depends on the account existing.
-        await sendMail(buildCodeMail({ to: email, purpose: "reset", code, appUrl, instanceLabel })).catch((error: unknown) => console.error("reset mail failed", error));
-      }
+      // A failed send is logged, not returned, so the response never depends on the account existing.
+      await sendCodeMail(email, "reset").catch((error: unknown) => console.error("reset mail failed", error));
     }
     response.status(202).json({});
   });

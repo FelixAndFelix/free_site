@@ -136,6 +136,65 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     });
   });
 
+  describe("abuse limits", () => {
+    it("sends at most 5 codes per address per hour, even from many IPs, with an unchanged answer", async () => {
+      /** Requests a registration code for the default address from a given client IP. */
+      const startFrom = (clientIp: string) =>
+        request(app)
+          .post("/api/auth/register/start")
+          .set("X-Forwarded-For", clientIp)
+          .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
+
+      for (let index = 0; index < 7; index++) {
+        await startFrom(`203.0.113.${index + 1}`).expect(202);
+        time += 61_000;
+      }
+      expect(sentMails).toHaveLength(5);
+
+      time += 60 * 60_000;
+      await startFrom("203.0.113.99").expect(202);
+      expect(sentMails).toHaveLength(6);
+    });
+
+    it("limits failed logins per IP, across many accounts (password spraying)", async () => {
+      /** Tries a wrong password for a different address each time from one IP. */
+      const spray = (index: number) =>
+        request(app)
+          .post("/api/auth/login")
+          .set("X-Forwarded-For", "203.0.113.7")
+          .send({ email: `victim${index}@dhbw.example`, password: "Summer2026!" });
+
+      for (let index = 0; index < 20; index++) await spray(index).expect(401);
+      await spray(20).expect(429);
+
+      const otherIp = await request(app)
+        .post("/api/auth/login")
+        .set("X-Forwarded-For", "203.0.113.8")
+        .send({ email: "victim0@dhbw.example", password: "Summer2026!" });
+      expect(otherIp.status).toBe(401);
+      time += 15 * 60_000;
+      await spray(21).expect(401);
+    });
+
+    it("does not count successful logins towards the per-IP limit", async () => {
+      await register();
+      for (let index = 0; index < 25; index++) {
+        await request(app).post("/api/auth/login").send({ email: EMAIL, password: PASSWORD }).expect(200);
+      }
+    });
+
+    it("allows at most 10 username changes per day", async () => {
+      const cookie = await register();
+      for (let index = 0; index < 10; index++) {
+        await request(app).put("/api/auth/username").set("Cookie", cookie).send({ username: `name${index}` }).expect(200);
+      }
+      await request(app).put("/api/auth/username").set("Cookie", cookie).send({ username: "name10" }).expect(429);
+
+      time += 24 * 60 * 60_000;
+      await request(app).put("/api/auth/username").set("Cookie", cookie).send({ username: "name10" }).expect(200);
+    });
+  });
+
   describe("email codes", () => {
     /** Tries to complete the registration with the given code. */
     function complete(code: string, username = "student") {

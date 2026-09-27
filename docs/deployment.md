@@ -34,7 +34,11 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
 4. **Reverse proxy.** Route `free.felixkarg.de` to `FRONTEND_BIND` using whatever your reverse proxy expects (see `deploy/traefik-free-site.yml` for a Traefik file-provider template).
 5. **DNS / tunnel.** Point `free.felixkarg.de` at your existing public entry point the same way your other `*.felixkarg.de` apps are exposed.
 6. **Mail (Resend).** Add the sending subdomain `noreply.felixkarg.de` in Resend and create the DNS records it shows (SPF and DKIM; Resend's Cloudflare auto-configuration does this), plus a DMARC record such as `_dmarc.felixkarg.de TXT "v=DMARC1; p=none"` (tighten to `p=quarantine` once all senders of the domain pass), which also covers the subdomain. `MAIL_FROM` must use an address on that subdomain. Wait until Resend marks the domain verified before the first registration. The provider sits behind the single `sendMail` function in `backend/src/mail.ts`, so switching provider means changing only that file.
-7. **Branch protection.** Protect `main` so only reviewed merges from `develop` deploy. The runner executes repo code on a shared host, so the deploy workflow only triggers on pushes to `main`, never on pull requests.
+7. **Actions settings for the self-hosted runner (important).** The repository is public and the runner has Docker access on your host, which is root-equivalent. A pull request from a fork runs the workflow files *from the pull request*, so without these settings a stranger could change `ci.yml` to `runs-on: self-hosted` and run code on your server:
+   - Settings → Actions → General → "Approval for running fork pull request workflows from contributors": **Require approval for all external contributors**. Never approve a run whose diff touches `.github/`.
+   - If the runner belongs to the organization: Settings → Actions → Runner groups → its group: allow only this repository and, under "Workflow access", only `FelixAndFelix/free_site/.github/workflows/deploy.yml@refs/heads/main` and `…@refs/heads/develop`.
+   - Keep the runner a non-root user; do not reuse it for repositories you do not control.
+8. **Branch protection.** Protect `main` so only reviewed merges from `develop` deploy. The runner executes repo code on a shared host, so the deploy workflow only triggers on pushes to `main`, never on pull requests.
 
 ## Dev instance (one-time setup)
 

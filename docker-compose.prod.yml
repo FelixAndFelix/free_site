@@ -15,6 +15,6 @@ services:
   frontend:
     restart: unless-stopped
     ports:
-      - "${FRONTEND_BIND:?set FRONTEND_BIND in .env, e.g. 192.168.1.10:8090}:80"
+      - "${FRONTEND_BIND:?set FRONTEND_BIND in .env, e.g. <lan-ip>:<port>}:80"
     labels:
       com.centurylinklabs.watchtower.enable: "false"
