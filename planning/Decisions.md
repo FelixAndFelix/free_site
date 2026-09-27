@@ -5,7 +5,8 @@ Single source of truth for architecture and process decisions. If another planni
 | Area | Decision | Reason |
 |---|---|---|
 | Auth | DHBW email verified by a 6-digit code, then a password. Passkey (WebAuthn via `simplewebauthn`) is an optional convenience. Course join code required at registration. | Email proves DHBW membership; the course code places the user in a course; passkeys add convenient login. |
-| Registration | Email + course code -> emailed code -> set password -> optionally add a passkey. One course per user in the MVP. | Simplest flow that gates on both domain and course. |
+| Registration | Email + username + course code -> emailed code -> set password -> optionally add a passkey. One course per user in the MVP. | Simplest flow that gates on both domain and course. |
+| Username | Required at registration, 3–20 letters, digits, `.`, `_` or `-`, unique ignoring case. Shown in the app instead of the email; admins see both. Can be changed later. Accounts from before usernames existed choose one right after login. | Users do not want their email shown everywhere; case-insensitive uniqueness prevents look-alike names such as `Felix` and `felix`. |
 | Login | Email + password, or passkey if set up. | Conventional model users expect. |
 | Password reset | Email code, then a new password. Revokes all sessions of that user. Replaces the former recovery code. | Email is the recovery path, so no recovery-code slice. |
 | Email storage | Plaintext `users.email`, unique, lowercased. | Needed to send mail on our own initiative. The privacy screen must state that the operator can link an email to a vote. |

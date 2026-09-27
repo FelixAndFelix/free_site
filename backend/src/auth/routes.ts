@@ -1,8 +1,8 @@
 import { Router, type Response } from "express";
-import { eq } from "drizzle-orm";
-import type { AuthUser, UserResponse } from "@free-site/shared";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { USERNAME_PATTERN, type AuthUser, type UserResponse } from "@free-site/shared";
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { Db } from "../database";
+import { isUniqueViolation, type Db } from "../database";
 import { readBody, readFields, sendError } from "../http";
 import type { SendMail } from "../mail";
 import { buildCodeMail } from "../mailTemplates";
@@ -32,6 +32,15 @@ export interface AuthDependencies {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
 const SEND_CODE_LIMIT_PER_IP = 5;
 const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Trims a username and returns it if it matches the username rules, otherwise null.
+ * @param {string} username
+ */
+function normalizeUsername(username: string): string | null {
+  const trimmed = username.trim();
+  return USERNAME_PATTERN.test(trimmed) ? trimmed : null;
+}
 
 /**
  * Trims and lowercases an email, or returns null if it is not shaped like one.
@@ -71,6 +80,14 @@ export function createAuthRouter({
     return course?.id ?? null;
   }
 
+  /** True if another user already has this username, ignoring upper and lower case. */
+  async function isUsernameTaken(username: string, exceptUserId?: string): Promise<boolean> {
+    const sameName = sql`lower(${users.username}) = lower(${username})`;
+    const condition = exceptUserId ? and(sameName, ne(users.id, exceptUserId)) : sameName;
+    const [existing] = await db.select({ id: users.id }).from(users).where(condition).limit(1);
+    return existing !== undefined;
+  }
+
   /** Looks up a user with password hash by normalized email. */
   async function findUserByEmail(email: string) {
     const [user] = await db.select().from(users).where(eq(users.email, email));
@@ -101,18 +118,22 @@ export function createAuthRouter({
   }
 
   /** Sends the user back as the response body. */
-  function sendUser(response: Response, status: number, { id, email, role }: AuthUser) {
-    const body: UserResponse = { user: { id, email, role } };
+  function sendUser(response: Response, status: number, { id, email, username, role }: AuthUser) {
+    const body: UserResponse = { user: { id, email, username, role } };
     response.status(status).json(body);
   }
 
   router.post("/register/start", async (request, response) => {
     if (!sendCodeLimiter.hit(request.ip ?? "unknown")) return sendError(response, 429, "rate_limited");
-    const fields = readFields(request, ["email", "courseCode"]);
+    const fields = readFields(request, ["email", "username", "courseCode"]);
     if (!fields) return sendError(response, 400, "invalid_request");
     const email = normalizeEmail(fields.email);
     if (!email) return sendError(response, 400, "invalid_email");
     if (!isAllowedDomain(email)) return sendError(response, 400, "email_domain_not_allowed");
+    const username = normalizeUsername(fields.username);
+    if (!username) return sendError(response, 400, "invalid_username");
+    // Checked before the mail is sent so the user can pick another name right away.
+    if (await isUsernameTaken(username)) return sendError(response, 409, "username_taken");
     if (!(await findCourseId(fields.courseCode))) return sendError(response, 400, "invalid_course_code");
     // Checked here, behind the per-IP limit, so the setup code cannot be brute-forced.
     if ((await checkSetupCode(readBody(request).adminSetupCode)) === "invalid") {
@@ -130,10 +151,13 @@ export function createAuthRouter({
   });
 
   router.post("/register/complete", async (request, response) => {
-    const fields = readFields(request, ["email", "courseCode", "code", "password"]);
+    const fields = readFields(request, ["email", "username", "courseCode", "code", "password"]);
     if (!fields) return sendError(response, 400, "invalid_request");
     const email = normalizeEmail(fields.email);
     if (!email) return sendError(response, 400, "invalid_email");
+    const username = normalizeUsername(fields.username);
+    if (!username) return sendError(response, 400, "invalid_username");
+    if (await isUsernameTaken(username)) return sendError(response, 409, "username_taken");
     if (!isValidPassword(fields.password)) return sendError(response, 400, "invalid_password");
     const courseId = await findCourseId(fields.courseCode);
     if (!courseId) return sendError(response, 400, "invalid_course_code");
@@ -146,11 +170,18 @@ export function createAuthRouter({
 
     const passwordHash = await hashPassword(fields.password);
     const role = setupCode === "valid" ? "admin" : "user";
-    const user = await db.transaction(async (transaction) => {
-      const [created] = await transaction.insert(users).values({ email, passwordHash, role }).returning();
-      await transaction.insert(courseMembers).values({ courseId, userId: created!.id });
-      return created!;
-    });
+    let user;
+    try {
+      user = await db.transaction(async (transaction) => {
+        const [created] = await transaction.insert(users).values({ email, username, passwordHash, role }).returning();
+        await transaction.insert(courseMembers).values({ courseId, userId: created!.id });
+        return created!;
+      });
+    } catch (error) {
+      // Someone took the username between the check above and this insert.
+      if (isUniqueViolation(error)) return sendError(response, 409, "username_taken");
+      throw error;
+    }
     await startSession(response, user.id);
     sendUser(response, 201, user);
   });
@@ -170,6 +201,24 @@ export function createAuthRouter({
     loginThrottle.reset(email);
     await startSession(response, user.id);
     sendUser(response, 200, user);
+  });
+
+  // Sets or changes the username; accounts from before usernames existed are asked for one after login.
+  router.put("/username", async (request, response) => {
+    const user = await readSessionUser(db, request, now());
+    if (!user) return sendError(response, 401, "unauthenticated");
+    const fields = readFields(request, ["username"]);
+    if (!fields) return sendError(response, 400, "invalid_request");
+    const username = normalizeUsername(fields.username);
+    if (!username) return sendError(response, 400, "invalid_username");
+    if (await isUsernameTaken(username, user.id)) return sendError(response, 409, "username_taken");
+    try {
+      await db.update(users).set({ username }).where(eq(users.id, user.id));
+    } catch (error) {
+      if (isUniqueViolation(error)) return sendError(response, 409, "username_taken");
+      throw error;
+    }
+    sendUser(response, 200, { ...user, username });
   });
 
   // For accounts registered before the first admin existed; same rules as at registration.

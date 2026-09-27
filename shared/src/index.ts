@@ -14,12 +14,20 @@ export const PASSWORD_MAX_LENGTH = 256;
 export interface AuthUser {
   id: string;
   email: string;
+  /** Shown instead of the email; null only for accounts that have not chosen one yet. */
+  username: string | null;
   role: UserRole;
 }
+
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 20;
+// Letters (including umlauts), digits, dot, underscore and hyphen.
+export const USERNAME_PATTERN = new RegExp(`^[\\p{L}\\p{N}._-]{${USERNAME_MIN_LENGTH},${USERNAME_MAX_LENGTH}}$`, "u");
 
 /** Body of POST /api/auth/register/start. */
 export interface RegisterStartRequest {
   email: string;
+  username: string;
   courseCode: string;
   /** Only for the first admin; must match ADMIN_SETUP_CODE while no admin exists. */
   adminSetupCode?: string;
@@ -28,10 +36,16 @@ export interface RegisterStartRequest {
 /** Body of POST /api/auth/register/complete. */
 export interface RegisterCompleteRequest {
   email: string;
+  username: string;
   courseCode: string;
   code: string;
   password: string;
   adminSetupCode?: string;
+}
+
+/** Body of PUT /api/auth/username. */
+export interface SetUsernameRequest {
+  username: string;
 }
 
 /** Body of POST /api/auth/claim-admin. */
@@ -73,6 +87,8 @@ export type ApiErrorCode =
   | "unauthenticated"
   | "rate_limited"
   | "invalid_setup_code"
+  | "invalid_username"
+  | "username_taken"
   | "forbidden"
   | "not_found"
   | "course_exists"
@@ -108,6 +124,7 @@ export interface Module {
 export interface AdminUserEntry {
   id: string;
   email: string;
+  username: string | null;
   role: UserRole;
   courseName: string | null;
 }

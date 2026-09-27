@@ -35,3 +35,14 @@ export function createDatabase(connectionString: string) {
 }
 
 export type Db = ReturnType<typeof createDatabase>["db"];
+
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * True if the error is Postgres' unique constraint violation (possibly wrapped by Drizzle).
+ * @param {unknown} error
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  const { code, cause } = error as { code?: string; cause?: { code?: string } };
+  return code === UNIQUE_VIOLATION || cause?.code === UNIQUE_VIOLATION;
+}

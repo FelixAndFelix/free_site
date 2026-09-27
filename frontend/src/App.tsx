@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPage } from "./pages/ResetPage";
+import { UsernamePage } from "./pages/UsernamePage";
 
 type Access = "guest" | "user" | "admin";
 
@@ -21,6 +22,8 @@ function RequireAccess({ access, children }: { access: Access; children: ReactNo
   if (access === "guest") return user ? <Navigate to="/" replace /> : children;
   if (!user) return <Navigate to="/login" replace />;
   if (access === "admin" && user.role !== "admin") return <Navigate to="/" replace />;
+  // Accounts from before usernames existed must choose one before using the app.
+  if (!user.username) return <UsernamePage required />;
   return children;
 }
 
@@ -31,6 +34,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<RequireAccess access="user"><HomePage /></RequireAccess>} />
         <Route path="/admin" element={<RequireAccess access="admin"><AdminPage /></RequireAccess>} />
+        <Route path="/username" element={<RequireAccess access="user"><UsernamePage /></RequireAccess>} />
         <Route path="/claim-admin" element={<RequireAccess access="user"><ClaimAdminPage /></RequireAccess>} />
         <Route path="/login" element={<RequireAccess access="guest"><LoginPage /></RequireAccess>} />
         <Route path="/register" element={<RequireAccess access="guest"><RegisterPage /></RequireAccess>} />

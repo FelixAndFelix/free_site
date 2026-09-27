@@ -1,8 +1,8 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mockApi, renderAt, type } from "./testUtils";
+import { findLoggedInAs, mockApi, renderAt, type } from "./testUtils";
 
-const USER = { id: "1", email: "student@dhbw.example", role: "user" };
+const USER = { id: "1", email: "student@dhbw.example", username: "student", role: "user" };
 
 describe("App", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -16,7 +16,7 @@ describe("App", () => {
   it("shows the home screen for a logged-in user", async () => {
     mockApi({ "GET /api/auth/me": { status: 200, body: { user: USER } } });
     renderAt("/");
-    expect(await screen.findByText(`Logged in as ${USER.email}`)).toBeInTheDocument();
+    expect(await findLoggedInAs("student")).toBeInTheDocument();
   });
 
   it("logs in and opens the home screen", async () => {
@@ -28,7 +28,7 @@ describe("App", () => {
     type(/Password/, "correct horse battery");
     fireEvent.click(screen.getByRole("button", { name: "Log in" }));
 
-    expect(await screen.findByText(`Logged in as ${USER.email}`)).toBeInTheDocument();
+    expect(await findLoggedInAs("student")).toBeInTheDocument();
     expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({
       email: USER.email,
       password: "correct horse battery",
@@ -48,7 +48,7 @@ describe("App", () => {
   });
 
   it("registers in two steps", async () => {
-    mockApi({
+    const fetchMock = mockApi({
       "POST /api/auth/register/start": { status: 202 },
       "POST /api/auth/register/complete": { status: 201, body: { user: USER } },
     });
@@ -56,6 +56,7 @@ describe("App", () => {
 
     await screen.findByRole("heading", { name: "Create an account" });
     type(/DHBW email/, USER.email);
+    type(/^Username/, "student");
     type(/Course code/, "WS24-123");
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));
 
@@ -64,7 +65,10 @@ describe("App", () => {
     type(/Password/, "correct horse battery");
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    expect(await screen.findByText(`Logged in as ${USER.email}`)).toBeInTheDocument();
+    expect(await findLoggedInAs("student")).toBeInTheDocument();
+    const [, start, complete] = fetchMock.mock.calls.map(([, init]) => JSON.parse((init?.body as string) ?? "{}"));
+    expect(start).toMatchObject({ username: "student" });
+    expect(complete).toMatchObject({ username: "student" });
   });
 
   it("explains a rejected email domain", async () => {
@@ -73,6 +77,7 @@ describe("App", () => {
 
     await screen.findByRole("heading", { name: "Create an account" });
     type(/DHBW email/, "someone@gmail.com");
+    type(/^Username/, "student");
     type(/Course code/, "WS24-123");
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));
 
@@ -85,6 +90,7 @@ describe("App", () => {
 
     await screen.findByRole("heading", { name: "Create an account" });
     type(/DHBW email/, USER.email);
+    type(/^Username/, "student");
     type(/Course code/, "INF24B-7KQ2XMPA");
     fireEvent.click(screen.getByText("I have an admin setup code"));
     type(/Admin setup code/, "the-setup-code");
@@ -108,6 +114,35 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Become admin" }));
 
     expect(await screen.findByRole("heading", { name: "Admin" })).toBeInTheDocument();
+  });
+
+  it("asks an account without a username to choose one first", async () => {
+    const fetchMock = mockApi({
+      "GET /api/auth/me": { status: 200, body: { user: { ...USER, username: null } } },
+      "PUT /api/auth/username": { status: 200, body: { user: USER } },
+    });
+    renderAt("/");
+
+    expect(await screen.findByRole("heading", { name: "Choose a username" })).toBeInTheDocument();
+    type(/^Username/, "student");
+    fireEvent.click(screen.getByRole("button", { name: "Save username" }));
+
+    expect(await findLoggedInAs("student")).toBeInTheDocument();
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({ username: "student" });
+  });
+
+  it("explains a taken username", async () => {
+    mockApi({
+      "GET /api/auth/me": { status: 200, body: { user: USER } },
+      "PUT /api/auth/username": { status: 409, body: { error: "username_taken" } },
+    });
+    renderAt("/username");
+
+    expect(await screen.findByRole("heading", { name: "Change username" })).toBeInTheDocument();
+    type(/^Username/, "felix");
+    fireEvent.click(screen.getByRole("button", { name: "Save username" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("This username is already taken.");
   });
 
   it("links admins to the admin page", async () => {

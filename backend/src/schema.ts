@@ -1,16 +1,23 @@
-import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { USER_ROLES } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
 export const emailCodePurpose = pgEnum("email_code_purpose", ["register", "reset"]);
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  role: userRole("role").notNull().default("user"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// username is nullable only for accounts created before usernames existed; they choose one after login.
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull().unique(),
+    username: text("username"),
+    passwordHash: text("password_hash").notNull(),
+    role: userRole("role").notNull().default("user"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`)],
+);
 
 export const courses = pgTable("courses", {
   id: uuid("id").primaryKey().defaultRandom(),

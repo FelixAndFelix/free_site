@@ -34,7 +34,7 @@ export function UsersSection() {
         {users.map((user) => (
           <li key={user.id} className="row">
             <span>
-              {user.email}
+              <strong>{user.username ?? "(no username yet)"}</strong> {user.email}
               <span className="muted">
                 {" "}
                 · {user.courseName ?? "no course"}

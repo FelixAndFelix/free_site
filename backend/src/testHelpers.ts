@@ -59,20 +59,28 @@ export function sessionCookie(response: request.Response): string {
  * Registers a user through the API and returns its session cookie.
  * @param {ReturnType<typeof createApp>} app
  * @param {Mail[]} sentMails
- * @param {{email: string, adminSetupCode?: string}} options
+ * The username defaults to the part of the email before the @.
+ * @param {{email: string, username?: string, adminSetupCode?: string}} options
  */
 export async function registerUser(
   app: ReturnType<typeof createApp>,
   sentMails: Mail[],
-  { email, adminSetupCode }: { email: string; adminSetupCode?: string },
+  { email, username = email.trim().split("@")[0]!, adminSetupCode }: { email: string; username?: string; adminSetupCode?: string },
 ): Promise<string> {
   await request(app)
     .post("/api/auth/register/start")
-    .send({ email, courseCode: TEST_COURSE_CODE, adminSetupCode })
+    .send({ email, username, courseCode: TEST_COURSE_CODE, adminSetupCode })
     .expect(202);
   const response = await request(app)
     .post("/api/auth/register/complete")
-    .send({ email, courseCode: TEST_COURSE_CODE, code: lastCode(sentMails), password: TEST_PASSWORD, adminSetupCode })
+    .send({
+      email,
+      username,
+      courseCode: TEST_COURSE_CODE,
+      code: lastCode(sentMails),
+      password: TEST_PASSWORD,
+      adminSetupCode,
+    })
     .expect(201);
   return sessionCookie(response);
 }

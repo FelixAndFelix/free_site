@@ -1,16 +1,16 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockApi, renderAt, sentBodies, type } from "../../testUtils";
+import { findLoggedInAs, mockApi, renderAt, sentBodies, type } from "../../testUtils";
 
-const ADMIN = { id: "a1", email: "admin@dhbw.example", role: "admin" };
+const ADMIN = { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin" };
 const COURSE = { id: "c1", name: "INF24B", joinCode: "INF24B-7KQ2XMPA", memberCount: 12, moduleCount: 2 };
 const MODULES = [
   { id: "m1", courseId: "c1", name: "Mathematik I", semester: 1 },
   { id: "m2", courseId: "c1", name: "Datenbanken", semester: 3 },
 ];
 const USERS = [
-  { id: "a1", email: "admin@dhbw.example", role: "admin", courseName: "INF24B" },
-  { id: "u1", email: "student@dhbw.example", role: "user", courseName: "INF24B" },
+  { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin", courseName: "INF24B" },
+  { id: "u1", email: "student@dhbw.example", username: "student", role: "user", courseName: "INF24B" },
 ];
 
 /**
@@ -37,7 +37,7 @@ describe("AdminPage", () => {
   it("sends a user who is not an admin back home", async () => {
     mockApi({ "GET /api/auth/me": { status: 200, body: { user: { ...ADMIN, role: "user" } } } });
     renderAt("/admin");
-    expect(await screen.findByText("Logged in as admin@dhbw.example")).toBeInTheDocument();
+    expect(await findLoggedInAs("felix")).toBeInTheDocument();
   });
 
   it("shows the courses with their join codes", async () => {
