@@ -8,6 +8,9 @@ RUN npm ci
 COPY tsconfig.base.json ./
 COPY shared shared
 COPY frontend frontend
+# Baked into the static build; set for the dev instance so it shows a banner.
+ARG INSTANCE_LABEL=""
+ENV VITE_INSTANCE_LABEL=$INSTANCE_LABEL
 RUN npm run build -w frontend
 
 FROM nginx:alpine

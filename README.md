@@ -42,4 +42,4 @@ To register locally, set `ALLOWED_EMAIL_DOMAINS` in `.env` and use the course co
 
 ## Deployment
 
-Merging `develop` into `main` deploys automatically. See [`docs/deployment.md`](docs/deployment.md).
+Merging into `develop` deploys the dev instance at [free-dev.felixkarg.de](https://free-dev.felixkarg.de); merging `develop` into `main` deploys production. See [`docs/deployment.md`](docs/deployment.md).

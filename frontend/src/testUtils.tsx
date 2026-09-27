@@ -64,3 +64,56 @@ export function type(label: RegExp, value: string) {
 export function findLoggedInAs(username: string) {
   return screen.findByText((_, element) => element?.tagName === "P" && element.textContent?.startsWith(`Logged in as ${username}`) === true);
 }
+
+/** Stand-in for the browser's EventSource that tests can push server-sent events through. */
+export class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+  url: string;
+  closed = false;
+  private listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+
+  /**
+   * Registers the instance so tests can find it.
+   * @param {string} url
+   */
+  constructor(url: string) {
+    this.url = url;
+    FakeEventSource.instances.push(this);
+  }
+
+  /**
+   * Stores a listener for a named event.
+   * @param {string} type
+   * @param {(event: MessageEvent) => void} listener
+   */
+  addEventListener(type: string, listener: (event: MessageEvent) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  /** Marks the stream as closed. */
+  close() {
+    this.closed = true;
+  }
+
+  /**
+   * Delivers an event to the listeners of its type, like the server would.
+   * @param {string} type
+   * @param {object} [data]
+   */
+  emit(type: string, data?: object) {
+    const event = new MessageEvent(type, { data: data === undefined ? undefined : JSON.stringify(data) });
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+
+  /** Installs the fake as the global EventSource and forgets earlier instances. */
+  static install() {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+  }
+
+  /** The most recently opened stream that is still open. */
+  static latest(): FakeEventSource {
+    const open = FakeEventSource.instances.filter((source) => !source.closed);
+    return open.at(-1)!;
+  }
+}

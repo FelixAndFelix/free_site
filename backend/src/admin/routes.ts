@@ -21,9 +21,12 @@ import { generateJoinCode } from "../courses";
 import { isUniqueViolation, type Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, users } from "../schema";
+import type { EventHub } from "../voting/events";
+import { withdrawVotesOutsideCourse } from "../voting/votes";
 
 export interface AdminDependencies {
   db: Db;
+  events: EventHub;
   now?: () => Date;
 }
 
@@ -41,7 +44,7 @@ function readName(value: unknown): string | null {
  * Builds the /api/admin router: courses, their modules and user roles. Admins only.
  * @param {AdminDependencies} dependencies
  */
-export function createAdminRouter({ db, now = () => new Date() }: AdminDependencies) {
+export function createAdminRouter({ db, events, now = () => new Date() }: AdminDependencies) {
   const router = Router();
   router.use(requireRole({ db, role: "admin", now }));
 
@@ -151,6 +154,7 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     if (!name || !isValidSemester) return sendError(response, 400, "invalid_request");
 
     const [created] = await db.insert(modules).values({ courseId, name, semester: semester as number }).returning();
+    events.publish(courseId, { type: "modules-changed" });
     const body: ModuleResponse = { module: created! };
     response.status(201).json(body);
   });
@@ -160,6 +164,7 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     if (!isUuid(moduleId)) return sendError(response, 404, "not_found");
     const deleted = await db.delete(modules).where(eq(modules.id, moduleId)).returning();
     if (deleted.length === 0) return sendError(response, 404, "not_found");
+    events.publish(deleted[0]!.courseId, { type: "modules-changed" });
     response.status(204).end();
   });
 
@@ -179,7 +184,8 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     const { userId } = request.params;
     const courseId = readBody(request).courseId;
     if (courseId !== null && typeof courseId !== "string") return sendError(response, 400, "invalid_request");
-    if (!isUuid(userId) || !(await findUserEntry(userId))) return sendError(response, 404, "not_found");
+    const before = isUuid(userId) ? await findUserEntry(userId) : undefined;
+    if (!before) return sendError(response, 404, "not_found");
     if (courseId !== null && (!isUuid(courseId) || !(await findCourse(courseId)))) {
       return sendError(response, 404, "not_found");
     }
@@ -188,6 +194,11 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
       await transaction.delete(courseMembers).where(eq(courseMembers.userId, userId));
       if (courseId !== null) await transaction.insert(courseMembers).values({ courseId, userId });
     });
+    // Votes only count in the voter's course, so votes on the old course's modules are withdrawn.
+    await withdrawVotesOutsideCourse(db, { userId, courseId, now: now() });
+    // The old course's counts changed; the user's own streams reconnect and follow the new course.
+    if (before.courseId && before.courseId !== courseId) events.publish(before.courseId, { type: "modules-changed" });
+    events.disconnectUser(userId);
     const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
     response.json(body);
   });

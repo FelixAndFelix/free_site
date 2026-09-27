@@ -1,6 +1,6 @@
 # Template for a Traefik file-provider config, if your reverse proxy uses one.
-# Adjust the entrypoint/tls lines to match your Traefik setup, and point the
-# url at the FRONTEND_BIND address:port you set in the server's .env.
+# Adjust the entrypoint/tls lines to match your Traefik setup, and point each url
+# at the FRONTEND_BIND address:port set in that instance's env file.
 http:
   routers:
     free-site-router:
@@ -10,8 +10,21 @@ http:
       service: freeSite
       tls: {}
 
+    # Dev instance, deployed on every merge into develop (see docs/deployment.md).
+    free-site-dev-router:
+      rule: "Host(`free-dev.felixkarg.de`)"
+      entryPoints:
+        - websecure
+      service: freeSiteDev
+      tls: {}
+
   services:
     freeSite:
       loadBalancer:
         servers:
           - url: "http://<lan-ip>:<port>"
+
+    freeSiteDev:
+      loadBalancer:
+        servers:
+          - url: "http://<lan-ip>:<dev-port>"

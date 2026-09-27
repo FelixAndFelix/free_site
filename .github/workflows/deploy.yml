@@ -1,8 +1,14 @@
 name: Deploy
 
+# main deploys production (free.felixkarg.de), develop the dev instance (free-dev.felixkarg.de).
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+
+# One deploy per branch at a time; a newer push waits instead of racing the running deploy.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   ci:
@@ -12,18 +18,29 @@ jobs:
     needs: ci
     runs-on: self-hosted
     env:
-      # Repo secret holding the path to the server's env file (see docs/deployment.md).
-      # Not a placeholder here: the path stays out of this public repo entirely.
-      ENV_FILE: ${{ secrets.ENV_FILE_PATH }}
+      # Each instance is its own compose project: separate containers, network and database volume.
+      PROJECT: ${{ github.ref_name == 'main' && 'free-site' || 'free-site-dev' }}
+      # Repo secrets holding the paths to the server's env files (see docs/deployment.md).
+      # Not placeholders here: the paths stay out of this public repo entirely.
+      PROD_ENV_FILE: ${{ secrets.ENV_FILE_PATH }}
+      DEV_ENV_FILE: ${{ secrets.DEV_ENV_FILE_PATH }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+      # Chosen in the shell, not with `cond && a || b`: that expression falls back to b when a is
+      # empty, which would deploy production with the dev env file if its secret were missing.
+      - name: Select env file
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then file="$PROD_ENV_FILE"; secret=ENV_FILE_PATH; else file="$DEV_ENV_FILE"; secret=DEV_ENV_FILE_PATH; fi
+          if [ -z "$file" ]; then echo "::error::The repository secret $secret is not set (see docs/deployment.md)."; exit 1; fi
+          echo "ENV_FILE=$file" >> "$GITHUB_ENV"
+      - run: docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
       - name: Verify deployment
         run: |
+          compose() { docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml "$@"; }
           for attempt in $(seq 1 15); do
-            if docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml exec -T frontend wget -qO- http://127.0.0.1/api/health | grep -q '"status":"ok"'; then
+            if compose exec -T frontend wget -qO- http://127.0.0.1/api/health | grep -q '"status":"ok"'; then
               echo "healthy"; exit 0
             fi
             sleep 4
           done
-          echo "health check failed"; docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml logs --tail 50; exit 1
+          echo "health check failed"; compose logs --tail 50; exit 1

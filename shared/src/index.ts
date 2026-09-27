@@ -94,11 +94,14 @@ export type ApiErrorCode =
   | "course_exists"
   | "cannot_change_own_role"
   | "course_not_empty"
+  | "vote_cooldown"
   | "internal_error";
 
 /** Body of every error response. */
 export interface ApiError {
   error: ApiErrorCode;
+  /** Only with vote_cooldown: ISO time from which the vote can be changed again. */
+  retryAt?: string;
 }
 
 export const MAX_SEMESTER = 6;
@@ -175,3 +178,61 @@ export interface UsersResponse {
 export interface UserEntryResponse {
   user: AdminUserEntry;
 }
+
+/** Vote values in scale order; the UI shows them as green, yellow and red. */
+export const VOTE_VALUES = ["free", "possible", "impossible"] as const;
+export type VoteValue = (typeof VOTE_VALUES)[number];
+
+export type VoteCounts = Record<VoteValue, number>;
+
+/** A user can change or withdraw their vote on a module at most once per this many minutes. */
+export const VOTE_COOLDOWN_MINUTES = 15;
+
+/** A module in the voting overview: vote counts of the course plus the current user's vote. */
+export interface ModuleOverview {
+  id: string;
+  name: string;
+  semester: number;
+  counts: VoteCounts;
+  myVote: VoteValue | null;
+  /** ISO time from which the user may change their vote again; null if they may change it now. */
+  canChangeAt: string | null;
+}
+
+/** Response body of GET /api/overview; course is null for users who are in no course. */
+export interface OverviewResponse {
+  course: { id: string; name: string } | null;
+  modules: ModuleOverview[];
+}
+
+/** Body of PUT /api/modules/:moduleId/vote. */
+export interface VoteRequest {
+  value: VoteValue;
+}
+
+/** Response body of the vote endpoints. */
+export interface ModuleOverviewResponse {
+  module: ModuleOverview;
+}
+
+/** Vote counts at the end of one calendar day (Europe/Berlin), YYYY-MM-DD. */
+export interface VoteHistoryDay {
+  day: string;
+  counts: VoteCounts;
+}
+
+/** Response body of GET /api/modules/:moduleId: the module and its daily vote history. */
+export interface ModuleDetailResponse {
+  module: ModuleOverview;
+  history: VoteHistoryDay[];
+}
+
+/**
+ * Events pushed over GET /api/events to everyone in a course (server-sent events).
+ * They carry course-wide totals only, never who voted what.
+ * - module-votes: a vote on a module changed; its new counts.
+ * - modules-changed: an admin added or deleted modules of the course; reload the module list.
+ */
+export type CourseEvent =
+  | { type: "module-votes"; moduleId: string; counts: VoteCounts }
+  | { type: "modules-changed" };
