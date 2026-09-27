@@ -19,6 +19,7 @@ COPY backend/package.json backend/
 COPY frontend/package.json frontend/
 RUN npm ci --omit=dev -w backend
 COPY --from=build /app/backend/dist backend/dist
+COPY backend/drizzle backend/drizzle
 USER node
 EXPOSE 3000
 CMD ["node", "backend/dist/server.js"]
