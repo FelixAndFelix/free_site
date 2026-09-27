@@ -1,0 +1,6 @@
+Contact: mailto:mail@felixkarg.de
+Expires: 2027-05-01T21:59:00.000Z
+Encryption: https://felixkarg.de/pgp.asc
+Encryption: https://keys.openpgp.org/search?q=mail@felixkarg.de
+Preferred-Languages: de, en
+Canonical: https://free.felixkarg.de/.well-known/security.txt

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Link, Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth";
 import { AccountDeletedPage } from "./pages/AccountDeletedPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -8,6 +8,7 @@ import { ClaimAdminPage } from "./pages/ClaimAdminPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ModulePage } from "./pages/module/ModulePage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPage } from "./pages/ResetPage";
 import { UsernamePage } from "./pages/UsernamePage";
@@ -45,8 +46,12 @@ export function App() {
         <Route path="/login" element={<RequireAccess access="guest"><LoginPage /></RequireAccess>} />
         <Route path="/register" element={<RequireAccess access="guest"><RegisterPage /></RequireAccess>} />
         <Route path="/reset" element={<ResetPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <footer className="site-footer">
+        <Link to="/privacy">Privacy</Link> · <a href="/.well-known/security.txt">Security</a>
+      </footer>
     </main>
   );
 }
