@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AdminUserEntry, UsersResponse } from "@free-site/shared";
+import type { AdminCourse, AdminUserEntry, UserEntryResponse, UsersResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../../api";
 import { useAuth } from "../../auth";
 
-/** Lists all users and lets admins promote or demote everyone except themselves. */
-export function UsersSection() {
+interface UsersSectionProps {
+  courses: AdminCourse[];
+  onChanged: () => Promise<void>;
+}
+
+/**
+ * Lists all users; admins can move users between courses and promote or demote everyone except themselves.
+ * @param {UsersSectionProps} props
+ */
+export function UsersSection({ courses, onChanged }: UsersSectionProps) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<AdminUserEntry[]>([]);
   const [error, setError] = useState("");
@@ -19,6 +27,17 @@ export function UsersSection() {
     reloadUsers();
   }, [reloadUsers]);
 
+  /** Moves a user to a course, or out of their course for an empty value. */
+  async function setCourse(user: AdminUserEntry, courseId: string) {
+    const result = await apiRequest<UserEntryResponse>(`/api/admin/users/${user.id}/course`, {
+      method: "PUT",
+      body: { courseId: courseId || null },
+    });
+    if (!result.ok) return setError(errorMessage(result.error));
+    setError("");
+    await Promise.all([reloadUsers(), onChanged()]);
+  }
+
   /** Switches a user between the user and admin role. */
   async function toggleRole(user: AdminUserEntry) {
     const role = user.role === "admin" ? "user" : "admin";
@@ -32,20 +51,30 @@ export function UsersSection() {
       <h2>Users</h2>
       <ul className="list">
         {users.map((user) => (
-          <li key={user.id} className="row">
+          <li key={user.id}>
             <span>
               {user.email}
-              <span className="muted">
-                {" "}
-                · {user.courseName ?? "no course"}
-                {user.role === "admin" && " · admin"}
-              </span>
+              {user.role === "admin" && <span className="muted"> · admin</span>}
             </span>
-            {user.id !== currentUser?.id && (
-              <button type="button" className="secondary" onClick={() => toggleRole(user)}>
-                {user.role === "admin" ? "Remove admin" : "Make admin"}
-              </button>
-            )}
+            <div className="actions">
+              <select
+                aria-label={`Course of ${user.email}`}
+                value={user.courseId ?? ""}
+                onChange={(event) => setCourse(user, event.target.value)}
+              >
+                <option value="">No course</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+              {user.id !== currentUser?.id && (
+                <button type="button" className="secondary" onClick={() => toggleRole(user)}>
+                  {user.role === "admin" ? "Remove admin" : "Make admin"}
+                </button>
+              )}
+            </div>
           </li>
         ))}
       </ul>
