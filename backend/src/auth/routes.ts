@@ -1,10 +1,14 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Response } from "express";
 import { eq } from "drizzle-orm";
-import type { ApiErrorCode, AuthUser, UserResponse } from "@free-site/shared";
+import type { AuthUser, UserResponse } from "@free-site/shared";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Db } from "../database";
+import { readBody, readFields, sendError } from "../http";
 import type { SendMail } from "../mail";
+import { buildCodeMail } from "../mailTemplates";
 import { courseMembers, courses, users } from "../schema";
 import { consumeEmailCode, issueEmailCode } from "./emailCodes";
+import { readSessionUser } from "./middleware";
 import { hashPassword, isValidPassword, verifyPassword } from "./passwords";
 import { createLoginThrottle, createWindowLimiter } from "./rateLimit";
 import {
@@ -13,7 +17,6 @@ import {
   createSession,
   deleteSession,
   deleteUserSessions,
-  findSessionUser,
 } from "./sessions";
 
 export interface AuthDependencies {
@@ -21,34 +24,14 @@ export interface AuthDependencies {
   sendMail: SendMail;
   allowedEmailDomains: string[];
   secureCookies: boolean;
+  appUrl: string;
+  adminSetupCode?: string;
   now?: () => Date;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
 const SEND_CODE_LIMIT_PER_IP = 5;
 const HOUR_MS = 60 * 60 * 1000;
-
-/**
- * Sends a JSON error body with the given status.
- * @param {Response} response
- * @param {number} status
- * @param {ApiErrorCode} error
- */
-function sendError(response: Response, status: number, error: ApiErrorCode) {
-  response.status(status).json({ error });
-}
-
-/**
- * Returns the named string fields of the request body, or null if any is missing.
- * @param {Request} request
- * @param {string[]} keys
- */
-function readFields<K extends string>(request: Request, keys: K[]): Record<K, string> | null {
-  const body: unknown = request.body;
-  if (typeof body !== "object" || body === null) return null;
-  const fields = body as Record<string, unknown>;
-  return keys.every((key) => typeof fields[key] === "string") ? (fields as Record<K, string>) : null;
-}
 
 /**
  * Trims and lowercases an email, or returns null if it is not shaped like one.
@@ -63,9 +46,18 @@ function normalizeEmail(email: string): string | null {
  * Builds the /api/auth router: registration, login, logout, current user and password reset.
  * @param {AuthDependencies} dependencies
  */
-export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCookies, now = () => new Date() }: AuthDependencies) {
+export function createAuthRouter({
+  db,
+  sendMail,
+  allowedEmailDomains,
+  secureCookies,
+  appUrl,
+  adminSetupCode,
+  now = () => new Date(),
+}: AuthDependencies) {
   const router = Router();
   const sendCodeLimiter = createWindowLimiter({ limit: SEND_CODE_LIMIT_PER_IP, windowMs: HOUR_MS, now });
+  const setupCodeLimiter = createWindowLimiter({ limit: SEND_CODE_LIMIT_PER_IP, windowMs: HOUR_MS, now });
   const loginThrottle = createLoginThrottle(now);
 
   /** True if the domain after the last @ is exactly one of the allowed domains. */
@@ -83,6 +75,17 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
   async function findUserByEmail(email: string) {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
+  }
+
+  /**
+   * Classifies the optional setup code of a registration: "none" if absent, "valid" only if it
+   * matches ADMIN_SETUP_CODE while no admin exists yet, otherwise "invalid".
+   */
+  async function checkSetupCode(provided: unknown): Promise<"none" | "valid" | "invalid"> {
+    if (typeof provided !== "string" || provided.trim() === "") return "none";
+    if (!adminSetupCode || !sameSecret(provided.trim(), adminSetupCode)) return "invalid";
+    const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).limit(1);
+    return admin ? "invalid" : "valid";
   }
 
   /** Starts a session and sets its cookie on the response. */
@@ -111,16 +114,16 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
     if (!email) return sendError(response, 400, "invalid_email");
     if (!isAllowedDomain(email)) return sendError(response, 400, "email_domain_not_allowed");
     if (!(await findCourseId(fields.courseCode))) return sendError(response, 400, "invalid_course_code");
+    // Checked here, behind the per-IP limit, so the setup code cannot be brute-forced.
+    if ((await checkSetupCode(readBody(request).adminSetupCode)) === "invalid") {
+      return sendError(response, 400, "invalid_setup_code");
+    }
 
     // Registered addresses get the same answer but no mail, so this does not reveal accounts.
     if (!(await findUserByEmail(email))) {
       const code = await issueEmailCode(db, email, "register", now());
       if (code) {
-        await sendMail({
-          to: email,
-          subject: "Your free_site verification code",
-          text: `Your verification code is ${code}. It is valid for 10 minutes.`,
-        });
+        await sendMail(buildCodeMail({ to: email, purpose: "register", code, appUrl }));
       }
     }
     response.status(202).json({});
@@ -137,10 +140,14 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
     if (!(await consumeEmailCode(db, email, "register", fields.code.trim(), now()))) {
       return sendError(response, 400, "invalid_code");
     }
+    // Checked after the email code is consumed, so every guess costs a new code.
+    const setupCode = await checkSetupCode(readBody(request).adminSetupCode);
+    if (setupCode === "invalid") return sendError(response, 400, "invalid_setup_code");
 
     const passwordHash = await hashPassword(fields.password);
+    const role = setupCode === "valid" ? "admin" : "user";
     const user = await db.transaction(async (transaction) => {
-      const [created] = await transaction.insert(users).values({ email, passwordHash }).returning();
+      const [created] = await transaction.insert(users).values({ email, passwordHash, role }).returning();
       await transaction.insert(courseMembers).values({ courseId, userId: created!.id });
       return created!;
     });
@@ -165,6 +172,18 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
     sendUser(response, 200, user);
   });
 
+  // For accounts registered before the first admin existed; same rules as at registration.
+  router.post("/claim-admin", async (request, response) => {
+    if (!setupCodeLimiter.hit(request.ip ?? "unknown")) return sendError(response, 429, "rate_limited");
+    const user = await readSessionUser(db, request, now());
+    if (!user) return sendError(response, 401, "unauthenticated");
+    if ((await checkSetupCode(readBody(request).adminSetupCode)) !== "valid") {
+      return sendError(response, 400, "invalid_setup_code");
+    }
+    await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+    sendUser(response, 200, { ...user, role: "admin" });
+  });
+
   router.post("/logout", async (request, response) => {
     const token: unknown = request.cookies?.[SESSION_COOKIE];
     if (typeof token === "string") await deleteSession(db, token);
@@ -173,8 +192,7 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
   });
 
   router.get("/me", async (request, response) => {
-    const token: unknown = request.cookies?.[SESSION_COOKIE];
-    const user = typeof token === "string" ? await findSessionUser(db, token, now()) : null;
+    const user = await readSessionUser(db, request, now());
     if (!user) return sendError(response, 401, "unauthenticated");
     sendUser(response, 200, user);
   });
@@ -190,11 +208,7 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
       const code = await issueEmailCode(db, email, "reset", now());
       if (code) {
         // A failed send is logged, not returned, so the response never depends on the account existing.
-        await sendMail({
-          to: email,
-          subject: "Your free_site password reset code",
-          text: `Your password reset code is ${code}. It is valid for 10 minutes.`,
-        }).catch((error: unknown) => console.error("reset mail failed", error));
+        await sendMail(buildCodeMail({ to: email, purpose: "reset", code, appUrl })).catch((error: unknown) => console.error("reset mail failed", error));
       }
     }
     response.status(202).json({});
@@ -218,4 +232,14 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
   });
 
   return router;
+}
+
+/**
+ * Compares two secrets in constant time, regardless of their lengths.
+ * @param {string} provided
+ * @param {string} expected
+ */
+function sameSecret(provided: string, expected: string): boolean {
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(provided), digest(expected));
 }
