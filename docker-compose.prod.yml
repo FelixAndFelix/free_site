@@ -1,0 +1,20 @@
+# Production. Your reverse proxy routes to FRONTEND_BIND (see deploy/traefik-free-site.yml and docs/deployment.md).
+# Use explicitly so docker-compose.override.yml is not loaded:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  database:
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  backend:
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  frontend:
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_BIND:?set FRONTEND_BIND in .env, e.g. 192.168.1.10:8090}:80"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"

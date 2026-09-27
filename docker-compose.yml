@@ -1,3 +1,5 @@
+name: free-site
+
 services:
   database:
     image: postgres:17-alpine
@@ -26,8 +28,6 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    ports:
-      - "8080:80"
     depends_on:
       - backend
 

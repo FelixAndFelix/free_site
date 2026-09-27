@@ -1,0 +1,29 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: self-hosted
+    env:
+      # Repo secret holding the path to the server's env file (see docs/deployment.md).
+      # Not a placeholder here: the path stays out of this public repo entirely.
+      ENV_FILE: ${{ secrets.ENV_FILE_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+      - name: Verify deployment
+        run: |
+          for attempt in $(seq 1 15); do
+            if docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml exec -T frontend wget -qO- http://127.0.0.1/api/health | grep -q '"status":"ok"'; then
+              echo "healthy"; exit 0
+            fi
+            sleep 4
+          done
+          echo "health check failed"; docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.prod.yml logs --tail 50; exit 1

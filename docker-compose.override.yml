@@ -1,0 +1,5 @@
+# Local development only. Production runs without this file (see docker-compose.prod.yml).
+services:
+  frontend:
+    ports:
+      - "8080:80"
