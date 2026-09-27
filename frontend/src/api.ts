@@ -1,6 +1,6 @@
 import type { ApiErrorCode } from "@free-site/shared";
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiErrorCode };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiErrorCode; retryAt?: string };
 
 const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   invalid_request: "Something about the request was wrong. Please try again.",
@@ -20,6 +20,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   course_exists: "A course with this name already exists.",
   cannot_change_own_role: "You cannot change your own role.",
   course_not_empty: "This course still has members. Move or remove them first.",
+  vote_cooldown: "You changed this vote recently. Please wait a moment.",
   internal_error: "Something went wrong on our side. Please try again later.",
 };
 
@@ -41,7 +42,8 @@ export async function apiRequest<T>(path: string, { method, body }: RequestOptio
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = response.status === 204 ? {} : await response.json();
-    return response.ok ? { ok: true, data: data as T } : { ok: false, error: data.error ?? "internal_error" };
+    if (response.ok) return { ok: true, data: data as T };
+    return { ok: false, error: data.error ?? "internal_error", retryAt: data.retryAt };
   } catch {
     return { ok: false, error: "internal_error" };
   }

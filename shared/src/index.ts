@@ -94,11 +94,14 @@ export type ApiErrorCode =
   | "course_exists"
   | "cannot_change_own_role"
   | "course_not_empty"
+  | "vote_cooldown"
   | "internal_error";
 
 /** Body of every error response. */
 export interface ApiError {
   error: ApiErrorCode;
+  /** Only with vote_cooldown: ISO time from which the vote can be changed again. */
+  retryAt?: string;
 }
 
 export const MAX_SEMESTER = 6;
@@ -182,6 +185,9 @@ export type VoteValue = (typeof VOTE_VALUES)[number];
 
 export type VoteCounts = Record<VoteValue, number>;
 
+/** A user can change or withdraw their vote on a module at most once per this many minutes. */
+export const VOTE_COOLDOWN_MINUTES = 15;
+
 /** A module in the voting overview: vote counts of the course plus the current user's vote. */
 export interface ModuleOverview {
   id: string;
@@ -189,6 +195,8 @@ export interface ModuleOverview {
   semester: number;
   counts: VoteCounts;
   myVote: VoteValue | null;
+  /** ISO time from which the user may change their vote again; null if they may change it now. */
+  canChangeAt: string | null;
 }
 
 /** Response body of GET /api/overview; course is null for users who are in no course. */

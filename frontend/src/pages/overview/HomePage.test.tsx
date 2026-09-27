@@ -1,11 +1,19 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockApi, renderAt, sentBodies } from "../../testUtils";
 
 const USER = { id: "1", email: "student@dhbw.example", username: "student", role: "user" };
 const EMPTY = { free: 0, possible: 0, impossible: 0 };
-const MATHE = { id: "m1", name: "Mathematik I", semester: 1, counts: { free: 3, possible: 1, impossible: 0 }, myVote: null };
-const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free" };
+const MATHE = {
+  id: "m1",
+  name: "Mathematik I",
+  semester: 1,
+  counts: { free: 3, possible: 1, impossible: 0 },
+  myVote: null,
+  canChangeAt: null,
+};
+const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free", canChangeAt: null };
+const IN_TEN_MINUTES = () => new Date(Date.now() + 10 * 60_000).toISOString();
 
 /**
  * Mocks a logged-in student whose course has the given modules, with extra replies merged in.
@@ -95,6 +103,52 @@ describe("HomePage overview", () => {
     renderAt("/");
 
     expect(await screen.findByRole("link", { name: "Mathematik I" })).toHaveAttribute("href", "/modules/m1");
+  });
+
+  it("locks the buttons during the cooldown and says until when", async () => {
+    mockOverview([{ ...DB, canChangeAt: IN_TEN_MINUTES() }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    for (const button of within(tile).getAllByRole("button")) expect(button).toBeDisabled();
+    expect(within(tile).getByText(/You can change your vote again at \d\d:\d\d/)).toBeInTheDocument();
+  });
+
+  it("locks the buttons right after voting", async () => {
+    const voted = { ...MATHE, myVote: "free", canChangeAt: IN_TEN_MINUTES() };
+    mockOverview([MATHE], { "PUT /api/modules/m1/vote": { status: 200, body: { module: voted } } });
+    renderAt("/");
+
+    const tile = await tileOf("Mathematik I");
+    fireEvent.click(within(tile).getByRole("button", { name: /Free/ }));
+
+    await vi.waitFor(() => expect(within(tile).getByRole("button", { name: /Possible/ })).toBeDisabled());
+  });
+
+  it("locks the buttons when the server refuses a change during the cooldown", async () => {
+    mockOverview([DB], {
+      "PUT /api/modules/m2/vote": { status: 429, body: { error: "vote_cooldown", retryAt: IN_TEN_MINUTES() } },
+    });
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    fireEvent.click(within(tile).getByRole("button", { name: /Possible/ }));
+
+    expect(await within(tile).findByText(/You can change your vote again at/)).toBeInTheDocument();
+    expect(within(tile).getByRole("button", { name: /Possible/ })).toBeDisabled();
+  });
+
+  it("unlocks the buttons when the cooldown is over", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockOverview([{ ...DB, canChangeAt: new Date(Date.now() + 60_000).toISOString() }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    expect(within(tile).getByRole("button", { name: /Possible/ })).toBeDisabled();
+    await act(() => vi.advanceTimersByTimeAsync(61_000));
+
+    expect(within(tile).getByRole("button", { name: /Possible/ })).toBeEnabled();
+    vi.useRealTimers();
   });
 
   it("tells a user without a course what to do", async () => {
