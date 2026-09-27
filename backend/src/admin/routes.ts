@@ -21,6 +21,7 @@ import { generateJoinCode } from "../courses";
 import { isUniqueViolation, type Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, users } from "../schema";
+import { withdrawVotesOutsideCourse } from "../voting/votes";
 
 export interface AdminDependencies {
   db: Db;
@@ -188,6 +189,8 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
       await transaction.delete(courseMembers).where(eq(courseMembers.userId, userId));
       if (courseId !== null) await transaction.insert(courseMembers).values({ courseId, userId });
     });
+    // Votes only count in the voter's course, so votes on the old course's modules are withdrawn.
+    await withdrawVotesOutsideCourse(db, { userId, courseId, now: now() });
     const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
     response.json(body);
   });

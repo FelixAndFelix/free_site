@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import {
   VOTE_VALUES,
   type AuthUser,
+  type ModuleDetailResponse,
   type ModuleOverview,
   type ModuleOverviewResponse,
   type OverviewResponse,
@@ -12,6 +13,8 @@ import { requireRole } from "../auth/middleware";
 import type { Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, votes } from "../schema";
+import { loadVoteHistory } from "./history";
+import { changeVote } from "./votes";
 
 export interface VotingDependencies {
   db: Db;
@@ -87,17 +90,23 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     response.json(body);
   });
 
+  router.get("/modules/:moduleId", async (request, response) => {
+    const target = await findVotableModule(response, request.params.moduleId);
+    if (!target) return sendError(response, 404, "not_found");
+    const body: ModuleDetailResponse = {
+      module: target.module,
+      history: await loadVoteHistory(db, target.module.id, now()),
+    };
+    response.json(body);
+  });
+
   router.put("/modules/:moduleId/vote", async (request, response) => {
     const value = readBody(request).value;
     if (!VOTE_VALUES.includes(value as VoteValue)) return sendError(response, 400, "invalid_request");
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
 
-    const vote = { value: value as VoteValue, updatedAt: now() };
-    await db
-      .insert(votes)
-      .values({ userId: target.user.id, moduleId: target.module.id, ...vote })
-      .onConflictDoUpdate({ target: [votes.userId, votes.moduleId], set: vote });
+    await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: value as VoteValue, now: now() });
     await sendModule(response, target.course.id, target.user.id, target.module.id);
   });
 
@@ -105,7 +114,7 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
 
-    await db.delete(votes).where(and(eq(votes.userId, target.user.id), eq(votes.moduleId, target.module.id)));
+    await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: null, now: now() });
     await sendModule(response, target.course.id, target.user.id, target.module.id);
   });
 

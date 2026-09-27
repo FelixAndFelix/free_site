@@ -80,6 +80,7 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
   - **modules:** `id`, `course_id`, `name`, `semester`.
   - **sessions:** `id`, `user_id`, `expires_at`.
   - **votes:** `user_id`, `module_id`, `vote_value` (`free`/`possible`/`impossible`), `updated_at`. PK `(user_id, module_id)`.
+  - **vote_changes:** `module_id`, `from_value`, `to_value`, `changed_at`. Jede Änderung einer Stimme, ohne `user_id`, damit der Verlauf keiner Person zuordenbar ist. Daraus entstehen die Langzeitgraphen.
   - **Kommentar (nach MVP):** `text`, `zeitstempel`, `module_id`, `user_id`.
   - *Hinweis:* Die E-Mail wird im Klartext gespeichert, weil das System Mails senden können muss. Votes hängen an der `user_id` und sind damit für den Betreiber mit DB-Zugriff einer E-Mail zuordenbar. Das muss im Datenschutz-Screen offen stehen. Passwörter werden nur als Argon2id-Hash gespeichert.
 
@@ -101,11 +102,11 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
 - Speichern der abgestimmten Werte pro `user_id` und Modul.
 - Ein User kann eine Abstimmung pro Modul tätigen (und überschreiben).
 - Diagramm-Ansicht der aggregierten Votes.
+- Langzeitgraph je Modul: Verlauf der Einschätzungen pro Tag, damit Meinungsänderungen sichtbar werden.
 
 Folgende Features nach der Erstimplementierung / Deployment:
 
 - Kommentarfunktion.
-- Langzeitgraphen der Votes eines Moduls.
 - Private Profileinstellungen für User.
 - Aufzählung der eigenen Module in der "Mein Profil"-Ansicht.
 

@@ -18,6 +18,7 @@ Single source of truth for architecture and process decisions. If another planni
 | Rate limits | Send-code: 5 per IP per hour plus a per-email limit. Login: 5 failures per email, then a growing delay of up to 15 minutes (no permanent lockout). | Prevents spam and brute force without letting an attacker lock out a victim. |
 | Anti-enumeration | Login and reset return the same generic response whether or not the email exists. | Does not leak who is registered. |
 | Vote link | `votes(user_id, module_id, vote_value, updated_at)`, composite PK `(user_id, module_id)`, changed via upsert. Users vote only on modules of their own course (others answer 404); clicking the current vote again withdraws it. Deleting a module or user deletes its votes. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
+| Vote history | Every vote change is appended to `vote_changes(module_id, from_value, to_value, changed_at)` in the same transaction as the vote itself, **without a user id**. The module detail view replays it into the counts at the end of each day (Europe/Berlin) and shows them as a line chart with tooltip and table view. Moving a user to another course withdraws their votes on the old course's modules. | Users want to see how opinions change over time. Without a user id the history cannot be linked to a person and survives account deletion. |
 | Vote values | Enum `free` / `possible` / `impossible` (UI: green `#15803d` / amber `#e0a100` / red `#dc2626`, checked with a color-vision validator; every bar carries text labels and counts so it never relies on color alone). | Matches the app's purpose; a single enum column. |
 | Session | Server-side session stored in Postgres, opaque ID in an `HttpOnly; Secure; SameSite=Lax` cookie. | Not readable by XSS, revocable server-side. |
 | Course management | Admins are global: every admin manages all courses, modules, join codes and users. Admins create and delete courses and modules, rotate join codes, and move a user to another course or remove them from their course. A course can only be deleted when it has no members; its modules go with it. | Deleting an empty course cannot remove accounts by accident. Global admins fit a small app run by a few trusted people. |
@@ -36,9 +37,9 @@ Single source of truth for architecture and process decisions. If another planni
 2. ✅ Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
 3. ✅ Admin bootstrap (`ADMIN_SETUP_CODE`, `/claim-admin`); create courses, join codes and modules on `/admin`.
 4. ✅ Voting (upsert) and overview with bar chart: the home screen lists the modules of the user's course by semester, each with a stacked bar of the vote shares and three vote buttons.
-5. Detail view and privacy info screen.
+5. Detail view ✅ (`/modules/:id`: current shares, vote buttons, history graph over time) and privacy info screen (open).
 6. Optional passkeys and "My devices".
 
 ## Post-MVP
 
-Comments, long-term vote graphs, profile settings, "my modules" list, email notifications with opt-in and unsubscribe, joining several courses.
+Comments, profile settings, "my modules" list, email notifications with opt-in and unsubscribe, joining several courses.
