@@ -7,6 +7,7 @@ import { readBody, readFields, sendError } from "../http";
 import type { SendMail } from "../mail";
 import { buildCodeMail } from "../mailTemplates";
 import { courseMembers, courses, users } from "../schema";
+import { deleteAccount, isLastAdmin } from "./accounts";
 import { consumeEmailCode, issueEmailCode } from "./emailCodes";
 import { readSessionUser } from "./middleware";
 import { hashPassword, isValidPassword, verifyPassword } from "./passwords";
@@ -27,6 +28,8 @@ export interface AuthDependencies {
   appUrl: string;
   instanceLabel?: string;
   adminSetupCode?: string;
+  /** Told when an account is deleted, so live viewers of the course reload and streams close. */
+  onAccountDeleted?: (userId: string, courseId: string | null) => void;
   now?: () => Date;
 }
 
@@ -64,6 +67,7 @@ export function createAuthRouter({
   appUrl,
   instanceLabel,
   adminSetupCode,
+  onAccountDeleted = () => {},
   now = () => new Date(),
 }: AuthDependencies) {
   const router = Router();
@@ -233,6 +237,30 @@ export function createAuthRouter({
     }
     await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
     sendUser(response, 200, { ...user, role: "admin" });
+  });
+
+  // Deleting needs the password again, so an open session on a shared computer is not enough.
+  // Wrong passwords count towards the same per-email throttle as logins.
+  router.delete("/account", async (request, response) => {
+    const sessionUser = await readSessionUser(db, request, now());
+    if (!sessionUser) return sendError(response, 401, "unauthenticated");
+    const fields = readFields(request, ["password"]);
+    if (!fields) return sendError(response, 400, "invalid_request");
+    if (loginThrottle.isBlocked(sessionUser.email)) return sendError(response, 429, "rate_limited");
+    const user = await findUserByEmail(sessionUser.email);
+    if (!user || !(await verifyPassword(user.passwordHash, fields.password))) {
+      loginThrottle.recordFailure(sessionUser.email);
+      return sendError(response, 401, "invalid_credentials");
+    }
+    // Without any admin nobody could manage courses; the setup code would work again, but only
+    // for whoever registers first, so the last admin has to promote someone before leaving.
+    if (await isLastAdmin(db, user.id)) return sendError(response, 409, "last_admin");
+
+    const courseId = await deleteAccount(db, { userId: user.id, now: now() });
+    loginThrottle.reset(sessionUser.email);
+    onAccountDeleted(user.id, courseId);
+    response.clearCookie(SESSION_COOKIE, { path: "/" });
+    response.status(204).end();
   });
 
   router.post("/logout", async (request, response) => {

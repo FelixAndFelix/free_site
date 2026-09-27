@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { CourseEvent } from "@free-site/shared";
 import { createDatabase } from "../database";
 import type { Mail } from "../mail";
-import { TEST_SETUP_CODE, createTestApp, registerUser, resetDatabase } from "../testHelpers";
+import { TEST_PASSWORD, TEST_SETUP_CODE, createTestApp, registerUser, resetDatabase } from "../testHelpers";
 import { createEventHub, type EventHub } from "./events";
 
 interface OpenStream {
@@ -199,6 +199,18 @@ describe.skipIf(!process.env.DATABASE_URL)("live updates over SSE (real Postgres
 
     await watcher.closed;
     expect(events.size()).toBe(0);
+  });
+
+  it("tells the course and closes the streams when someone deletes their account", async () => {
+    await request(app).put(`/api/modules/${moduleId}/vote`).set("Cookie", studentCookie).send({ value: "free" });
+    const watcher = await openStream(adminCookie);
+    const leaving = await openStream(studentCookie);
+    await waitForStreams(2);
+
+    await request(app).delete("/api/auth/account").set("Cookie", studentCookie).send({ password: TEST_PASSWORD }).expect(204);
+
+    expect(await watcher.next("modules-changed")).toEqual({ type: "modules-changed" });
+    await leaving.closed;
   });
 
   it("answers 204 to a user without a course, so the browser stops reconnecting", async () => {

@@ -404,6 +404,16 @@ h2 {
   text-align: center;
 }
 
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.checkbox input {
+  margin-top: 0.2rem;
+}
+
 /* Very narrow phones: the label alone names the vote; the legend above keeps the color key */
 @media (max-width: 399px) {
   .vote-button .swatch,

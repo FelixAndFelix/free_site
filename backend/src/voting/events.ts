@@ -75,12 +75,21 @@ export function createEventHub() {
     for (const stream of [...streams]) if (stream.userId === userId) close(stream);
   }
 
+  /**
+   * A user left their course (moved elsewhere or account deleted): the course's viewers reload,
+   * since the totals changed, and the user's own streams close.
+   */
+  function userLeftCourse(userId: string, courseId: string | null) {
+    if (courseId) publish(courseId, { type: "modules-changed" });
+    disconnectUser(userId);
+  }
+
   /** Number of open streams, for tests. */
   function size(): number {
     return streams.size;
   }
 
-  return { subscribe, publish, disconnectUser, size };
+  return { subscribe, publish, disconnectUser, userLeftCourse, size };
 }
 
 export type EventHub = ReturnType<typeof createEventHub>;

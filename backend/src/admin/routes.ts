@@ -197,8 +197,7 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     // Votes only count in the voter's course, so votes on the old course's modules are withdrawn.
     await withdrawVotesOutsideCourse(db, { userId, courseId, now: now() });
     // The old course's counts changed; the user's own streams reconnect and follow the new course.
-    if (before.courseId && before.courseId !== courseId) events.publish(before.courseId, { type: "modules-changed" });
-    events.disconnectUser(userId);
+    events.userLeftCourse(userId, before.courseId !== courseId ? before.courseId : null);
     const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
     response.json(body);
   });
