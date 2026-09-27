@@ -27,8 +27,8 @@ Single source of truth for architecture and process decisions. If another planni
 | Repo | npm workspaces monorepo: `frontend/`, `backend/`, `shared/`, plus `docker-compose.yml`. Each package has its own Dockerfile. | One PR flow and CI; shared API types and vote enum avoid drift. |
 | Testing | Vitest everywhere, Testing Library for React, real-Postgres integration tests, WebAuthn and mail sending mocked at their boundaries, TDD per slice. No E2E in the MVP. | Upsert and constraint logic is where bugs live. |
 | Hosting | Own homeserver, Docker Compose. Production publishes no host ports; an existing Traefik instance and Cloudflare Tunnel (already used for other apps on the same infra) route to it, via a generic `FRONTEND_BIND` address/port. Deploys run on a shared GitHub Actions self-hosted runner (no dedicated one). | Reuses infra that already exists instead of standing up a second tunnel or runner; see `docs/deployment.md` (kept generic, since the repo is public). |
-| Domain | `free.felixkarg.de`, also the WebAuthn `rpID`. | Passkeys are bound to it. It must not change once users register. |
-| Git | `main` = production, `develop` = integration, `feature/*` branches. Merging `develop` into `main` deploys. | Follows `DevelopingRules.md`. |
+| Domain | `free.felixkarg.de`, also the WebAuthn `rpID`. The dev instance runs on `free-dev.felixkarg.de` (one level, so Cloudflare's free `*.felixkarg.de` certificate covers it). | Passkeys are bound to the domain. It must not change once users register. |
+| Git | `main` = production, `develop` = integration, `feature/*` branches. Merging into `develop` deploys the dev instance (`free-dev.felixkarg.de`, own compose project and database); merging `develop` into `main` deploys production. | Follows `DevelopingRules.md`; every change is tried on a production-like instance before it reaches users. |
 
 ## Build order
 

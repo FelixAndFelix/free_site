@@ -3,10 +3,12 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { App } from "./App";
 import { AuthProvider } from "./auth";
+import { InstanceBanner } from "./InstanceBanner";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <InstanceBanner />
     <BrowserRouter>
       <AuthProvider>
         <App />

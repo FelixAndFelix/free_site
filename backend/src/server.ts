@@ -23,6 +23,7 @@ const authRouter = createAuthRouter({
   allowedEmailDomains: config.allowedEmailDomains,
   secureCookies: config.isProduction,
   appUrl: config.appUrl,
+  instanceLabel: config.instanceLabel,
   adminSetupCode: config.adminSetupCode,
 });
 

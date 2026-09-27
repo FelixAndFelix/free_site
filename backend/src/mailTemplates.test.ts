@@ -11,6 +11,12 @@ describe("buildCodeMail", () => {
     expect(mail.subject).toBe("042137 is your free_site verification code");
   });
 
+  it("marks mails of a non-production instance in the subject", () => {
+    const mail = buildCodeMail({ to: "a@dhbw.example", purpose: "register", code: "042137", appUrl: APP_URL, instanceLabel: "Development" });
+
+    expect(mail.subject).toBe("042137 is your free_site verification code (Development)");
+  });
+
   it("puts the code into both the HTML and the plain-text body", () => {
     const mail = buildCodeMail({ to: "a@dhbw.example", purpose: "reset", code: "042137", appUrl: APP_URL });
 
