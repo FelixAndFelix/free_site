@@ -8,6 +8,7 @@ export interface Config {
   mailFrom: string;
   adminSetupCode: string | undefined;
   appUrl: string;
+  instanceLabel: string | undefined;
   initialCourseName: string;
   initialCourseJoinCode: string | undefined;
 }
@@ -27,6 +28,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     resendApiKey: env.RESEND_API_KEY || undefined,
     mailFrom: env.MAIL_FROM ?? "free_site <free@noreply.felixkarg.de>",
     adminSetupCode: env.ADMIN_SETUP_CODE?.trim() || undefined,
+    // Set only on non-production instances (e.g. "Development"); shown in mail subjects and a banner.
+    instanceLabel: env.INSTANCE_LABEL?.trim() || undefined,
     appUrl: env.APP_URL ?? "https://free.felixkarg.de",
     initialCourseName: env.INITIAL_COURSE_NAME ?? "INF24B",
     // Kept in the env file, not in a migration, because the repo is public and the code grants registration.

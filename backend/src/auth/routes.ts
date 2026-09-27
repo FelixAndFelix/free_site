@@ -25,6 +25,7 @@ export interface AuthDependencies {
   allowedEmailDomains: string[];
   secureCookies: boolean;
   appUrl: string;
+  instanceLabel?: string;
   adminSetupCode?: string;
   now?: () => Date;
 }
@@ -61,6 +62,7 @@ export function createAuthRouter({
   allowedEmailDomains,
   secureCookies,
   appUrl,
+  instanceLabel,
   adminSetupCode,
   now = () => new Date(),
 }: AuthDependencies) {
@@ -144,7 +146,7 @@ export function createAuthRouter({
     if (!(await findUserByEmail(email))) {
       const code = await issueEmailCode(db, email, "register", now());
       if (code) {
-        await sendMail(buildCodeMail({ to: email, purpose: "register", code, appUrl }));
+        await sendMail(buildCodeMail({ to: email, purpose: "register", code, appUrl, instanceLabel }));
       }
     }
     response.status(202).json({});
@@ -257,7 +259,7 @@ export function createAuthRouter({
       const code = await issueEmailCode(db, email, "reset", now());
       if (code) {
         // A failed send is logged, not returned, so the response never depends on the account existing.
-        await sendMail(buildCodeMail({ to: email, purpose: "reset", code, appUrl })).catch((error: unknown) => console.error("reset mail failed", error));
+        await sendMail(buildCodeMail({ to: email, purpose: "reset", code, appUrl, instanceLabel })).catch((error: unknown) => console.error("reset mail failed", error));
       }
     }
     response.status(202).json({});
