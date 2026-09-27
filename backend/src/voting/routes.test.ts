@@ -137,6 +137,24 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
       await vote(studentCookie, moduleId, "possible").expect(200);
     });
 
+    it("does not apply to admins", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      const voted = await vote(adminCookie, moduleId, "free").expect(200);
+      expect(voted.body.module.canChangeAt).toBeNull();
+
+      await vote(adminCookie, moduleId, "impossible").expect(200);
+      await request(app).delete(`/api/modules/${moduleId}/vote`).set("Cookie", adminCookie).expect(200);
+      await vote(adminCookie, moduleId, "possible").expect(200);
+    });
+
+    it("still applies to users after an admin voted", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      await vote(adminCookie, moduleId, "free").expect(200);
+      await vote(studentCookie, moduleId, "free").expect(200);
+
+      await vote(studentCookie, moduleId, "impossible").expect(429);
+    });
+
     it("applies per module and per user", async () => {
       const first = await createModule("Datenbanken", 3);
       const second = await createModule("Mathematik I", 1);

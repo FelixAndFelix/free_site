@@ -25,6 +25,14 @@ export interface VotingDependencies {
 }
 
 /**
+ * Admins may change their vote at any time, e.g. to try things out; the cooldown only limits users.
+ * @param {AuthUser} user
+ */
+function isExemptFromCooldown(user: AuthUser): boolean {
+  return user.role === "admin";
+}
+
+/**
  * Builds the voting router: the overview of the user's course and casting, changing
  * or withdrawing the user's vote on a module. Logged-in users only.
  * @param {VotingDependencies} dependencies
@@ -47,7 +55,8 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
    * Loads modules of a course with their vote counts and the user's own vote.
    * Table names are written out in sql`` because Drizzle leaves columns unqualified there.
    */
-  async function loadOverview(courseId: string, userId: string, moduleId?: string): Promise<ModuleOverview[]> {
+  async function loadOverview(courseId: string, user: AuthUser, moduleId?: string): Promise<ModuleOverview[]> {
+    const userId = user.id;
     const countOf = (value: VoteValue) => sql<number>`(count(*) filter (where ${votes}.vote_value = ${value}))::int`;
     const rows = await db
       .select({
@@ -70,7 +79,9 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
     return rows.map(({ free, possible, impossible, myUpdatedAt, ...module }) => ({
       ...module,
       counts: { free, possible, impossible },
-      canChangeAt: cooldownEnd(myUpdatedAt ? new Date(myUpdatedAt) : null, time)?.toISOString() ?? null,
+      canChangeAt: isExemptFromCooldown(user)
+        ? null
+        : (cooldownEnd(myUpdatedAt ? new Date(myUpdatedAt) : null, time)?.toISOString() ?? null),
     }));
   }
 
@@ -82,7 +93,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
     const user = response.locals.user as AuthUser;
     const course = await findUserCourse(user.id);
     if (!course || !isUuid(moduleId)) return null;
-    const [module] = await loadOverview(course.id, user.id, moduleId);
+    const [module] = await loadOverview(course.id, user, moduleId);
     return module ? { user, course, module } : null;
   }
 
@@ -94,8 +105,8 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
   }
 
   /** Sends the refreshed module after a vote change and tells the rest of the course about it. */
-  async function sendModule(response: Response, courseId: string, userId: string, moduleId: string) {
-    const [module] = await loadOverview(courseId, userId, moduleId);
+  async function sendModule(response: Response, courseId: string, user: AuthUser, moduleId: string) {
+    const [module] = await loadOverview(courseId, user, moduleId);
     events.publish(courseId, { type: "module-votes", moduleId, counts: module!.counts });
     const body: ModuleOverviewResponse = { module: module! };
     response.json(body);
@@ -113,7 +124,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
   router.get("/overview", async (_request, response) => {
     const user = response.locals.user as AuthUser;
     const course = await findUserCourse(user.id);
-    const body: OverviewResponse = { course, modules: course ? await loadOverview(course.id, user.id) : [] };
+    const body: OverviewResponse = { course, modules: course ? await loadOverview(course.id, user) : [] };
     response.json(body);
   });
 
@@ -138,18 +149,25 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
       moduleId: target.module.id,
       value: value as VoteValue,
       now: now(),
+      ignoreCooldown: isExemptFromCooldown(target.user),
     });
     if (!result.ok) return sendCooldown(response, result.retryAt);
-    await sendModule(response, target.course.id, target.user.id, target.module.id);
+    await sendModule(response, target.course.id, target.user, target.module.id);
   });
 
   router.delete("/modules/:moduleId/vote", async (request, response) => {
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
 
-    const result = await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: null, now: now() });
+    const result = await changeVote(db, {
+      userId: target.user.id,
+      moduleId: target.module.id,
+      value: null,
+      now: now(),
+      ignoreCooldown: isExemptFromCooldown(target.user),
+    });
     if (!result.ok) return sendCooldown(response, result.retryAt);
-    await sendModule(response, target.course.id, target.user.id, target.module.id);
+    await sendModule(response, target.course.id, target.user, target.module.id);
   });
 
   return router;
