@@ -1,0 +1,74 @@
+/* Mobile first */
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #f4f4f5;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  width: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: #fff;
+  border-radius: 0.5rem;
+}
+
+.card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+}
+
+input {
+  border: 1px solid #a1a1aa;
+}
+
+button {
+  border: none;
+  background: #166534;
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: #166534;
+  border: 1px solid #166534;
+}
+
+[role="alert"] {
+  margin: 0;
+  color: #b91c1c;
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+  .container {
+    max-width: 28rem;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+}
