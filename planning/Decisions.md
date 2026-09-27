@@ -24,13 +24,13 @@ Single source of truth for architecture and process decisions. If another planni
 | Frontend | Vite, React, TypeScript, React Router, plain mobile-first CSS. | Small app (4 screens); matches `DevelopingRules.md`. Screens are designed fresh later; the old Stitch prototype is discarded. |
 | Repo | npm workspaces monorepo: `frontend/`, `backend/`, `shared/`, plus `docker-compose.yml`. Each package has its own Dockerfile. | One PR flow and CI; shared API types and vote enum avoid drift. |
 | Testing | Vitest everywhere, Testing Library for React, real-Postgres integration tests, WebAuthn and mail sending mocked at their boundaries, TDD per slice. No E2E in the MVP. | Upsert and constraint logic is where bugs live. |
-| Hosting | Own homeserver, Docker Compose, Cloudflare Tunnel, GitHub Actions self-hosted runner. | Outbound-only tunnel hides the home IP; matches the deploy plan. |
+| Hosting | Own homeserver, Docker Compose. Production publishes no host ports; an existing Traefik instance and Cloudflare Tunnel (already used for other apps on the same infra) route to it, via a generic `FRONTEND_BIND` address/port. Deploys run on a shared GitHub Actions self-hosted runner (no dedicated one). | Reuses infra that already exists instead of standing up a second tunnel or runner; see `docs/deployment.md` (kept generic, since the repo is public). |
 | Domain | `free.felixkarg.de`, also the WebAuthn `rpID`. | Passkeys are bound to it. It must not change once users register. |
 | Git | `main` = production, `develop` = integration, `feature/*` branches. Merging `develop` into `main` deploys. | Follows `DevelopingRules.md`. |
 
 ## Build order
 
-1. Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres, `cloudflared`), `/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de`.
+1. ✅ Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres), `/api/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de` via the existing reverse proxy.
 2. Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
 3. Admin bootstrap; create courses and modules.
 4. Voting (upsert) and overview with bar chart.
