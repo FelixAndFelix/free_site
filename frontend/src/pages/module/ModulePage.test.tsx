@@ -1,6 +1,6 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mockApi, renderAt } from "../../testUtils";
+import { FakeEventSource, mockApi, renderAt } from "../../testUtils";
 
 const USER = { id: "1", email: "student@dhbw.example", username: "student", role: "user" };
 const MODULE = {
@@ -82,6 +82,19 @@ describe("ModulePage", () => {
     await vi.waitFor(() =>
       expect(fetchMock.mock.calls.filter(([path, init]) => path === "/api/modules/m1" && init?.method === "GET")).toHaveLength(2),
     );
+  });
+
+  it("reloads the history when someone votes on this module, but not on others", async () => {
+    FakeEventSource.install();
+    const fetchMock = mockDetail(HISTORY);
+    renderAt("/modules/m1");
+    await screen.findByRole("heading", { name: "Datenbanken" });
+    const detailLoads = () => fetchMock.mock.calls.filter(([path]) => path === "/api/modules/m1").length;
+
+    act(() => FakeEventSource.latest().emit("module-votes", { type: "module-votes", moduleId: "m2", counts: {} }));
+    act(() => FakeEventSource.latest().emit("module-votes", { type: "module-votes", moduleId: "m1", counts: {} }));
+
+    await vi.waitFor(() => expect(detailLoads()).toBe(2));
   });
 
   it("shows an error for a module outside the user's course", async () => {

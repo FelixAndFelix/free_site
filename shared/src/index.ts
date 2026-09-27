@@ -226,3 +226,13 @@ export interface ModuleDetailResponse {
   module: ModuleOverview;
   history: VoteHistoryDay[];
 }
+
+/**
+ * Events pushed over GET /api/events to everyone in a course (server-sent events).
+ * They carry course-wide totals only, never who voted what.
+ * - module-votes: a vote on a module changed; its new counts.
+ * - modules-changed: an admin added or deleted modules of the course; reload the module list.
+ */
+export type CourseEvent =
+  | { type: "module-votes"; moduleId: string; counts: VoteCounts }
+  | { type: "modules-changed" };

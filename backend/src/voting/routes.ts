@@ -15,10 +15,12 @@ import type { Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, votes } from "../schema";
 import { loadVoteHistory } from "./history";
+import type { EventHub } from "./events";
 import { changeVote, cooldownEnd } from "./votes";
 
 export interface VotingDependencies {
   db: Db;
+  events: EventHub;
   now?: () => Date;
 }
 
@@ -27,7 +29,7 @@ export interface VotingDependencies {
  * or withdrawing the user's vote on a module. Logged-in users only.
  * @param {VotingDependencies} dependencies
  */
-export function createVotingRouter({ db, now = () => new Date() }: VotingDependencies) {
+export function createVotingRouter({ db, events, now = () => new Date() }: VotingDependencies) {
   const router = Router();
   router.use(requireRole({ db, role: "user", now }));
 
@@ -91,12 +93,22 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     response.status(429).set("Retry-After", String(seconds)).json(body);
   }
 
-  /** Sends the refreshed module after a vote change. */
+  /** Sends the refreshed module after a vote change and tells the rest of the course about it. */
   async function sendModule(response: Response, courseId: string, userId: string, moduleId: string) {
     const [module] = await loadOverview(courseId, userId, moduleId);
+    events.publish(courseId, { type: "module-votes", moduleId, counts: module!.counts });
     const body: ModuleOverviewResponse = { module: module! };
     response.json(body);
   }
+
+  // Live updates for the user's course. A user without a course has nothing to follow (204 stops
+  // EventSource from reconnecting).
+  router.get("/events", async (_request, response) => {
+    const user = response.locals.user as AuthUser;
+    const course = await findUserCourse(user.id);
+    if (!course) return response.status(204).end();
+    if (!events.subscribe(response, user.id, course.id)) return sendError(response, 429, "rate_limited");
+  });
 
   router.get("/overview", async (_request, response) => {
     const user = response.locals.user as AuthUser;

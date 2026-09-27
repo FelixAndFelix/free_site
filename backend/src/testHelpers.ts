@@ -6,6 +6,7 @@ import { createAuthRouter } from "./auth/routes";
 import type { Db } from "./database";
 import type { Mail } from "./mail";
 import { courses } from "./schema";
+import { createEventHub, type EventHub } from "./voting/events";
 import { createVotingRouter } from "./voting/routes";
 
 export const TEST_PASSWORD = "correct horse battery";
@@ -23,9 +24,19 @@ export async function resetDatabase(db: Db) {
 
 /**
  * Builds the full app with captured mails and an injected clock.
- * @param {{db: Db, sentMails: Mail[], now: () => Date}} options
+ * @param {{db: Db, sentMails: Mail[], now: () => Date, events?: EventHub}} options
  */
-export function createTestApp({ db, sentMails, now }: { db: Db; sentMails: Mail[]; now: () => Date }) {
+export function createTestApp({
+  db,
+  sentMails,
+  now,
+  events = createEventHub(),
+}: {
+  db: Db;
+  sentMails: Mail[];
+  now: () => Date;
+  events?: EventHub;
+}) {
   const authRouter = createAuthRouter({
     db,
     sendMail: async (mail) => void sentMails.push(mail),
@@ -35,8 +46,8 @@ export function createTestApp({ db, sentMails, now }: { db: Db; sentMails: Mail[
     adminSetupCode: TEST_SETUP_CODE,
     now,
   });
-  const adminRouter = createAdminRouter({ db, now });
-  const votingRouter = createVotingRouter({ db, now });
+  const adminRouter = createAdminRouter({ db, events, now });
+  const votingRouter = createVotingRouter({ db, events, now });
   return createApp({ checkDatabase: async () => true, authRouter, adminRouter, votingRouter, trustProxy: "loopback" });
 }
 

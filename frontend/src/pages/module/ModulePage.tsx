@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { ModuleDetailResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../../api";
+import { useCourseEvents } from "../../useCourseEvents";
 import { VoteBar } from "../overview/VoteBar";
 import { VoteButtons } from "../overview/VoteButtons";
 import { HistoryChart } from "./HistoryChart";
@@ -21,6 +22,11 @@ export function ModulePage() {
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  // Someone else's vote changes today's point in the history too, so the detail is reloaded.
+  useCourseEvents((event) => {
+    if (event.type === "modules-changed" || event.moduleId === moduleId) loadDetail();
+  }, loadDetail);
 
   if (error) {
     return (

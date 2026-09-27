@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import type { ModuleOverview, OverviewResponse } from "@free-site/shared";
+import type { CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../api";
 import { useAuth } from "../auth";
+import { useCourseEvents } from "../useCourseEvents";
 import { ModuleTile } from "./overview/ModuleTile";
 
 /** Overview of the user's course: every module grouped by semester, with vote shares and vote buttons. */
@@ -11,12 +12,32 @@ export function HomePage() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    apiRequest<OverviewResponse>("/api/overview").then((result) => {
-      if (!result.ok) return setError(errorMessage(result.error));
-      setOverview(result.data);
-    });
+  const loadOverview = useCallback(async () => {
+    const result = await apiRequest<OverviewResponse>("/api/overview");
+    if (!result.ok) return setError(errorMessage(result.error));
+    setError("");
+    setOverview(result.data);
   }, []);
+
+  useEffect(() => {
+    loadOverview();
+  }, [loadOverview]);
+
+  /** Applies a live update: new counts in place, or a reload when the module list changed. */
+  function handleEvent(event: CourseEvent) {
+    if (event.type === "modules-changed") return void loadOverview();
+    setOverview(
+      (current) =>
+        current && {
+          ...current,
+          modules: current.modules.map((module) =>
+            module.id === event.moduleId ? { ...module, counts: event.counts } : module,
+          ),
+        },
+    );
+  }
+
+  useCourseEvents(handleEvent, loadOverview);
 
   /** Replaces one module after the user voted on it. */
   function updateModule(updated: ModuleOverview) {
