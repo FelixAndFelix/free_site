@@ -5,6 +5,7 @@ import { loadConfig } from "./config";
 import { ensureCourse } from "./courses";
 import { createDatabase } from "./database";
 import { createSendMail } from "./mail";
+import { createEventHub } from "./voting/events";
 import { createVotingRouter } from "./voting/routes";
 
 const config = loadConfig(process.env);
@@ -27,11 +28,13 @@ const authRouter = createAuthRouter({
   adminSetupCode: config.adminSetupCode,
 });
 
+const events = createEventHub();
+
 createApp({
   checkDatabase: database.check,
   authRouter,
-  adminRouter: createAdminRouter({ db: database.db }),
-  votingRouter: createVotingRouter({ db: database.db }),
+  adminRouter: createAdminRouter({ db: database.db, events }),
+  votingRouter: createVotingRouter({ db: database.db, events }),
   trustProxy: config.trustProxy,
 }).listen(config.port, () => {
   console.log(`backend listening on port ${config.port}`);

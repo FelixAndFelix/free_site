@@ -1,6 +1,6 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mockApi, renderAt, sentBodies } from "../../testUtils";
+import { FakeEventSource, mockApi, renderAt, sentBodies } from "../../testUtils";
 
 const USER = { id: "1", email: "student@dhbw.example", username: "student", role: "user" };
 const EMPTY = { free: 0, possible: 0, impossible: 0 };
@@ -149,6 +149,59 @@ describe("HomePage overview", () => {
 
     expect(within(tile).getByRole("button", { name: /Possible/ })).toBeEnabled();
     vi.useRealTimers();
+  });
+
+  describe("live updates", () => {
+    it("updates a module's bar when someone else votes", async () => {
+      FakeEventSource.install();
+      mockOverview([MATHE]);
+      renderAt("/");
+
+      const tile = await tileOf("Mathematik I");
+      expect(FakeEventSource.latest().url).toBe("/api/events");
+      act(() => FakeEventSource.latest().emit("module-votes", { type: "module-votes", moduleId: "m1", counts: { free: 3, possible: 1, impossible: 5 } }));
+
+      expect(within(tile).getByRole("img", { name: "Free 3, Possible 1, Impossible 5" })).toBeInTheDocument();
+      expect(within(tile).getByText("9 votes")).toBeInTheDocument();
+    });
+
+    it("keeps the user's own vote and cooldown when counts arrive", async () => {
+      FakeEventSource.install();
+      const locked = { ...DB, canChangeAt: IN_TEN_MINUTES() };
+      mockOverview([locked]);
+      renderAt("/");
+
+      const tile = await tileOf("Datenbanken");
+      act(() => FakeEventSource.latest().emit("module-votes", { type: "module-votes", moduleId: "m2", counts: { free: 2, possible: 0, impossible: 0 } }));
+
+      expect(within(tile).getByRole("button", { name: /Free/ })).toHaveAttribute("aria-pressed", "true");
+      expect(within(tile).getByRole("button", { name: /Possible/ })).toBeDisabled();
+    });
+
+    it("reloads the module list when an admin changes it, and after a reconnect", async () => {
+      FakeEventSource.install();
+      const fetchMock = mockOverview([MATHE]);
+      renderAt("/");
+      await tileOf("Mathematik I");
+      const overviewLoads = () => fetchMock.mock.calls.filter(([path]) => path === "/api/overview").length;
+
+      act(() => FakeEventSource.latest().emit("modules-changed", { type: "modules-changed" }));
+      await vi.waitFor(() => expect(overviewLoads()).toBe(2));
+      act(() => FakeEventSource.latest().emit("open"));
+      act(() => FakeEventSource.latest().emit("open"));
+      await vi.waitFor(() => expect(overviewLoads()).toBe(3));
+    });
+
+    it("closes the stream when leaving the page", async () => {
+      FakeEventSource.install();
+      mockOverview([MATHE]);
+      renderAt("/");
+      await tileOf("Mathematik I");
+      const source = FakeEventSource.latest();
+
+      cleanup();
+      expect(source.closed).toBe(true);
+    });
   });
 
   it("tells a user without a course what to do", async () => {
