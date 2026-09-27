@@ -17,6 +17,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    ADMIN_SETUP_CODE=<long random, e.g. $(openssl rand -hex 16)>
    ```
    Pick a free port (`ss -tlnp`). The backend refuses to start in production without `RESEND_API_KEY`.
+   Optional: `APP_URL` (default `https://free.felixkarg.de`) is the link in the mail footer.
    Optional: `TRUST_PROXY` (default `loopback, linklocal, uniquelocal`) decides which proxy hops are trusted when reading the client IP for rate limits. The default fits a chain of LAN/Docker proxies; change it only if the rate limit sees your proxy's address instead of the client's.
 2. **GitHub: secret.** In the repo, go to Settings -> Secrets and variables -> Actions -> New repository secret. Name it `ENV_FILE_PATH` and set it to the absolute path of the env file from step 1. This keeps the path out of the public repo.
 3. **App host: runner.** Reuse an existing self-hosted runner that can reach the app host's Docker daemon, or register a new one (Settings -> Actions -> Runners -> New self-hosted runner, Linux x64, as a non-root user already in the `docker` group, run as a service). The workflow targets the `self-hosted` label only, so any such runner picks up the job.
@@ -32,5 +33,5 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
 - Database migrations run automatically when the backend starts. After a schema change in `backend/src/schema.ts`, run `npm run db:generate -w backend` and commit the new file in `backend/drizzle/`.
 - Local development: `docker compose up` loads `docker-compose.override.yml` and serves on http://localhost:8080. Without `RESEND_API_KEY`, mails (and their codes) are printed to the backend log.
 - **First admin:** register at `/register`, open "I have an admin setup code" and enter `ADMIN_SETUP_CODE`. If your account already exists, log in and open `/claim-admin` instead. The code works only while no admin exists; afterwards promote further admins on `/admin`. Courses, join codes and modules are managed there too.
-- Registration needs a course code. On start the backend creates the course `INF24B` with `INITIAL_COURSE_JOIN_CODE` if no course of that name exists; hand that code to your fellow students. Changing the env value later does not change an existing course (rotation comes with the admin screens in build step 3). Locally the code is `INF24B-local`.
+- Registration needs a course code. On start the backend creates the course `INF24B` with `INITIAL_COURSE_JOIN_CODE` if no course of that name exists; hand that code to your fellow students. Changing the env value later does not change an existing course; replace a leaked join code with "New join code" on `/admin`. Locally the code is `INF24B-local`.
 - Keep host names, LAN addresses, usernames and file paths for your infrastructure out of this repo (it is public); they belong only in the server's env file and your own notes.

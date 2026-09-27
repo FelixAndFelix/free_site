@@ -31,8 +31,8 @@ Single source of truth for architecture and process decisions. If another planni
 ## Build order
 
 1. ✅ Walking skeleton: monorepo scaffold, Docker Compose (frontend, backend, Postgres), `/api/health` endpoint, CI (lint, test, build), first deployment to `free.felixkarg.de` via the existing reverse proxy.
-2. Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
-3. Admin bootstrap; create courses and modules.
+2. ✅ Registration and login: email code, password, course code, sessions, password reset, `sendMail` with the provider configured (DNS records included).
+3. ✅ Admin bootstrap (`ADMIN_SETUP_CODE`, `/claim-admin`); create courses, join codes and modules on `/admin`.
 4. Voting (upsert) and overview with bar chart.
 5. Detail view and privacy info screen.
 6. Optional passkeys and "My devices".
