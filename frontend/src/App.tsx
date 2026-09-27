@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth";
+import { AccountDeletedPage } from "./pages/AccountDeletedPage";
+import { AccountPage } from "./pages/AccountPage";
 import { AdminPage } from "./pages/admin/AdminPage";
 import { ClaimAdminPage } from "./pages/ClaimAdminPage";
 import { HomePage } from "./pages/HomePage";
@@ -36,6 +38,8 @@ export function App() {
         <Route path="/" element={<RequireAccess access="user"><HomePage /></RequireAccess>} />
         <Route path="/modules/:moduleId" element={<RequireAccess access="user"><ModulePage /></RequireAccess>} />
         <Route path="/admin" element={<RequireAccess access="admin"><AdminPage /></RequireAccess>} />
+        <Route path="/account" element={<RequireAccess access="user"><AccountPage /></RequireAccess>} />
+        <Route path="/account-deleted" element={<AccountDeletedPage />} />
         <Route path="/username" element={<RequireAccess access="user"><UsernamePage /></RequireAccess>} />
         <Route path="/claim-admin" element={<RequireAccess access="user"><ClaimAdminPage /></RequireAccess>} />
         <Route path="/login" element={<RequireAccess access="guest"><LoginPage /></RequireAccess>} />

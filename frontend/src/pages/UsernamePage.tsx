@@ -23,7 +23,7 @@ export function UsernamePage({ required = false }: { required?: boolean }) {
     const result = await apiRequest<UserResponse>("/api/auth/username", { method: "PUT", body: { username } });
     if (!result.ok) return setError(errorMessage(result.error));
     setUser(result.data.user);
-    navigate("/");
+    navigate(required ? "/" : "/account");
   }
 
   return (
@@ -33,7 +33,7 @@ export function UsernamePage({ required = false }: { required?: boolean }) {
       <Field label="Username" autoComplete="username" value={username} onValue={setUsername} />
       {error && <p role="alert">{error}</p>}
       <button type="submit">Save username</button>
-      {!required && <Link to="/">Back</Link>}
+      {!required && <Link to="/account">Back</Link>}
     </form>
   );
 }

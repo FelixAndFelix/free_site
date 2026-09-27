@@ -48,6 +48,11 @@ export interface SetUsernameRequest {
   username: string;
 }
 
+/** Body of DELETE /api/auth/account: the password confirms that the owner is deleting it. */
+export interface DeleteAccountRequest {
+  password: string;
+}
+
 /** Body of POST /api/auth/claim-admin. */
 export interface ClaimAdminRequest {
   adminSetupCode: string;
@@ -95,6 +100,7 @@ export type ApiErrorCode =
   | "cannot_change_own_role"
   | "course_not_empty"
   | "vote_cooldown"
+  | "last_admin"
   | "internal_error";
 
 /** Body of every error response. */

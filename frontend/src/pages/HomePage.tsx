@@ -57,7 +57,7 @@ export function HomePage() {
         </button>
       </header>
       <p>
-        Logged in as <strong>{user?.username}</strong> · <Link to="/username">Change username</Link>
+        Logged in as <strong>{user?.username}</strong> · <Link to="/account">Account</Link>
         {user?.role === "admin" && (
           <>
             {" "}

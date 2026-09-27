@@ -1,5 +1,6 @@
 import { createAdminRouter } from "./admin/routes";
 import { createApp } from "./app";
+import { deleteExpiredRecords } from "./auth/accounts";
 import { createAuthRouter } from "./auth/routes";
 import { loadConfig } from "./config";
 import { ensureCourse } from "./courses";
@@ -18,6 +19,8 @@ if (config.initialCourseJoinCode) {
   if (created) console.log(`created course ${config.initialCourseName}`);
 }
 
+const events = createEventHub();
+
 const authRouter = createAuthRouter({
   db: database.db,
   sendMail: createSendMail(config),
@@ -26,9 +29,24 @@ const authRouter = createAuthRouter({
   appUrl: config.appUrl,
   instanceLabel: config.instanceLabel,
   adminSetupCode: config.adminSetupCode,
+  onAccountDeleted: events.userLeftCourse,
 });
 
-const events = createEventHub();
+// Hourly, and once at start: expired email codes and sessions are removed, not only rejected.
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+/** Deletes expired records and logs how many; a failure is logged and retried next hour. */
+async function cleanUp() {
+  try {
+    const deleted = await deleteExpiredRecords(database.db, new Date());
+    if (deleted.emailCodes || deleted.sessions) {
+      console.log(`cleanup: deleted ${deleted.emailCodes} expired email codes, ${deleted.sessions} expired sessions`);
+    }
+  } catch (error) {
+    console.error("cleanup failed", error);
+  }
+}
+await cleanUp();
+setInterval(cleanUp, CLEANUP_INTERVAL_MS).unref();
 
 createApp({
   checkDatabase: database.check,
