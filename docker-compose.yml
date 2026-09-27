@@ -22,7 +22,7 @@ services:
       DATABASE_URL: postgres://free_site:${POSTGRES_PASSWORD}@database:5432/free_site
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MAIL_FROM: ${MAIL_FROM:-free_site <no-reply@felixkarg.de>}
+      MAIL_FROM: ${MAIL_FROM:-free_site <free@noreply.felixkarg.de>}
       INITIAL_COURSE_JOIN_CODE: ${INITIAL_COURSE_JOIN_CODE:-}
     depends_on:
       database:

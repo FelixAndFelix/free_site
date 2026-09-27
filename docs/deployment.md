@@ -12,7 +12,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    FRONTEND_BIND=<lan-ip>:<port>
    ALLOWED_EMAIL_DOMAINS=<campus domains, comma-separated>
    RESEND_API_KEY=<from Resend>
-   MAIL_FROM=free_site <no-reply@felixkarg.de>
+   MAIL_FROM=free_site <free@noreply.felixkarg.de>
    INITIAL_COURSE_JOIN_CODE=<long random, e.g. INF24B-$(openssl rand -hex 4)>
    ```
    Pick a free port (`ss -tlnp`). The backend refuses to start in production without `RESEND_API_KEY`.
@@ -21,7 +21,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
 3. **App host: runner.** Reuse an existing self-hosted runner that can reach the app host's Docker daemon, or register a new one (Settings -> Actions -> Runners -> New self-hosted runner, Linux x64, as a non-root user already in the `docker` group, run as a service). The workflow targets the `self-hosted` label only, so any such runner picks up the job.
 4. **Reverse proxy.** Route `free.felixkarg.de` to `FRONTEND_BIND` using whatever your reverse proxy expects (see `deploy/traefik-free-site.yml` for a Traefik file-provider template).
 5. **DNS / tunnel.** Point `free.felixkarg.de` at your existing public entry point the same way your other `*.felixkarg.de` apps are exposed.
-6. **Mail (Resend).** Add `felixkarg.de` as a sending domain in Resend and create the DNS records it shows (SPF and DKIM), plus a DMARC record such as `_dmarc.felixkarg.de TXT "v=DMARC1; p=quarantine"`. Wait until Resend marks the domain verified before the first registration. The provider sits behind the single `sendMail` function in `backend/src/mail.ts`, so switching provider means changing only that file.
+6. **Mail (Resend).** Add the sending subdomain `noreply.felixkarg.de` in Resend and create the DNS records it shows (SPF and DKIM; Resend's Cloudflare auto-configuration does this), plus a DMARC record such as `_dmarc.felixkarg.de TXT "v=DMARC1; p=quarantine"`, which also covers the subdomain. `MAIL_FROM` must use an address on that subdomain. Wait until Resend marks the domain verified before the first registration. The provider sits behind the single `sendMail` function in `backend/src/mail.ts`, so switching provider means changing only that file.
 7. **Branch protection.** Protect `main` so only reviewed merges from `develop` deploy. The runner executes repo code on a shared host, so the deploy workflow only triggers on pushes to `main`, never on pull requests.
 
 ## Notes
