@@ -1,0 +1,17 @@
+# Template for a Traefik file-provider config, if your reverse proxy uses one.
+# Adjust the entrypoint/tls lines to match your Traefik setup, and point the
+# url at the FRONTEND_BIND address:port you set in the server's .env.
+http:
+  routers:
+    free-site-router:
+      rule: "Host(`free.felixkarg.de`)"
+      entryPoints:
+        - websecure
+      service: freeSite
+      tls: {}
+
+  services:
+    freeSite:
+      loadBalancer:
+        servers:
+          - url: "http://<lan-ip>:<port>"
