@@ -79,7 +79,7 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
   - **courses:** `id`, `name`, `join_code`. **course_members:** `course_id`, `user_id`.
   - **modules:** `id`, `course_id`, `name`, `semester`.
   - **sessions:** `id`, `user_id`, `expires_at`.
-  - **votes:** `user_id`, `module_id`, `vote_value` (`free`/`possible`/`impossible`, leer = zurückgezogen), `updated_at`. PK `(user_id, module_id)`. Eine Stimme lässt sich höchstens alle 15 Minuten ändern.
+  - **votes:** `user_id`, `module_id`, `vote_value` (`free`/`possible`/`impossible`, leer = zurückgezogen), `updated_at`. PK `(user_id, module_id)`. Eine Stimme lässt sich höchstens alle 15 Minuten ändern (Admins ausgenommen).
   - **vote_changes:** `module_id`, `from_value`, `to_value`, `changed_at`. Jede Änderung einer Stimme, ohne `user_id`, damit der Verlauf keiner Person zuordenbar ist. Daraus entstehen die Langzeitgraphen.
   - **Kommentar (nach MVP):** `text`, `zeitstempel`, `module_id`, `user_id`.
   - *Hinweis:* Die E-Mail wird im Klartext gespeichert, weil das System Mails senden können muss. Votes hängen an der `user_id` und sind damit für den Betreiber mit DB-Zugriff einer E-Mail zuordenbar. Das muss im Datenschutz-Screen offen stehen. Passwörter werden nur als Argon2id-Hash gespeichert.
