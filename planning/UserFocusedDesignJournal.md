@@ -61,7 +61,7 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
    
 
 - Abuse Case und Evil User Behavior:
-  1. Als Evil User will ich die Abstimmung durch Mehrfachabstimmung manipulieren. -> *Verhindert durch Primärschlüssel `(user_id, modul_id)`. Mehrere Accounts sind nur mit einem gültigen Kurs-Code möglich.*
+  1. Als Evil User will ich die Abstimmung durch Mehrfachabstimmung manipulieren. -> *Verhindert durch Primärschlüssel `(user_id, module_id)`. Mehrere Accounts sind nur mit einem gültigen Kurs-Code möglich.*
   2. Als Angreifer will ich Kurs-Codes oder den Admin-Setup-Code per Brute-Force erraten. -> *Verhindert durch striktes Rate Limiting des Registrierungs-Endpunkts (z.B. 5 Versuche pro IP/Stunde), lange zufällige Codes und Cloudflare.*
   3. Als Angreifer will ich gefälschte Abstimmungs-Requests senden. -> *Verhindert durch serverseitig geprüfte Session und WebAuthn-Signaturprüfung beim Passkey-Login.*
   4. Als Angreifer will ich Passwörter bruteforcen. -> *Erschwert durch Argon2id, Login-Rate-Limit (5 Fehlversuche pro E-Mail, danach wachsende Verzögerung bis 15 Minuten, keine dauerhafte Sperre) und Cloudflare.*
@@ -77,10 +77,10 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
   - **email_codes:** `email`, `purpose` (`register`/`reset`), `code_hash`, `expires_at`, `attempts`, `created_at`.
   - **passkey_credentials (optional):** `credential_id`, `public_key`, `user_id`, `sign_count`, `transports`.
   - **courses:** `id`, `name`, `join_code`. **course_members:** `course_id`, `user_id`.
-  - **moduls:** `id`, `course_id`, `name`.
+  - **modules:** `id`, `course_id`, `name`, `semester`.
   - **sessions:** `id`, `user_id`, `expires_at`.
-  - **votes:** `user_id`, `modul_id`, `vote_value` (`free`/`possible`/`impossible`), `updated_at`. PK `(user_id, modul_id)`.
-  - **Kommentar (nach MVP):** `text`, `zeitstempel`, `modul_id`, `user_id`.
+  - **votes:** `user_id`, `module_id`, `vote_value` (`free`/`possible`/`impossible`), `updated_at`. PK `(user_id, module_id)`.
+  - **Kommentar (nach MVP):** `text`, `zeitstempel`, `module_id`, `user_id`.
   - *Hinweis:* Die E-Mail wird im Klartext gespeichert, weil das System Mails senden können muss. Votes hängen an der `user_id` und sind damit für den Betreiber mit DB-Zugriff einer E-Mail zuordenbar. Das muss im Datenschutz-Screen offen stehen. Passwörter werden nur als Argon2id-Hash gespeichert.
 
 - Wie werden diese Daten erhoben?

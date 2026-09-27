@@ -5,7 +5,7 @@ import { createApp } from "./app";
 
 describe("GET /api/health", () => {
   it("returns 200 and ok when the database is reachable", async () => {
-    const app = createApp({ checkDatabase: async () => true, authRouter: Router(), adminRouter: Router() });
+    const app = createApp({ checkDatabase: async () => true, authRouter: Router(), adminRouter: Router(), votingRouter: Router() });
 
     const response = await request(app).get("/api/health");
 
@@ -14,7 +14,7 @@ describe("GET /api/health", () => {
   });
 
   it("returns 503 and degraded when the database is unreachable", async () => {
-    const app = createApp({ checkDatabase: async () => false, authRouter: Router(), adminRouter: Router() });
+    const app = createApp({ checkDatabase: async () => false, authRouter: Router(), adminRouter: Router(), votingRouter: Router() });
 
     const response = await request(app).get("/api/health");
 
