@@ -30,14 +30,27 @@ const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helve
 /**
  * Builds the verification or reset code mail as HTML with a plain-text fallback.
  * The code leads the subject so it is readable straight from a phone notification.
- * @param {{to: string, purpose: CodeMailPurpose, code: string, appUrl: string}} options
+ * An instance label (e.g. "Development") is appended to the subject, so test mails stand out.
+ * @param {{to: string, purpose: CodeMailPurpose, code: string, appUrl: string, instanceLabel?: string}} options
  */
-export function buildCodeMail({ to, purpose, code, appUrl }: { to: string; purpose: CodeMailPurpose; code: string; appUrl: string }): Mail {
+export function buildCodeMail({
+  to,
+  purpose,
+  code,
+  appUrl,
+  instanceLabel,
+}: {
+  to: string;
+  purpose: CodeMailPurpose;
+  code: string;
+  appUrl: string;
+  instanceLabel?: string;
+}): Mail {
   const content = CONTENT[purpose];
   const host = new URL(appUrl).host;
   return {
     to,
-    subject: `${code} ${content.subject}`,
+    subject: `${code} ${content.subject}${instanceLabel ? ` (${instanceLabel})` : ""}`,
     text: [
       content.heading,
       "",

@@ -7,7 +7,11 @@ services:
       # Local only; production sets a long random code in the server env file.
       INITIAL_COURSE_JOIN_CODE: INF24B-local
       ADMIN_SETUP_CODE: admin-local
+      INSTANCE_LABEL: Local
 
   frontend:
+    build:
+      args:
+        INSTANCE_LABEL: Local
     ports:
       - "8080:80"
