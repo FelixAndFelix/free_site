@@ -19,6 +19,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   not_found: "This no longer exists. Reload the page.",
   course_exists: "A course with this name already exists.",
   cannot_change_own_role: "You cannot change your own role.",
+  course_not_empty: "This course still has members. Move or remove them first.",
   internal_error: "Something went wrong on our side. Please try again later.",
 };
 

@@ -93,6 +93,7 @@ export type ApiErrorCode =
   | "not_found"
   | "course_exists"
   | "cannot_change_own_role"
+  | "course_not_empty"
   | "internal_error";
 
 /** Body of every error response. */
@@ -126,6 +127,7 @@ export interface AdminUserEntry {
   email: string;
   username: string | null;
   role: UserRole;
+  courseId: string | null;
   courseName: string | null;
 }
 
@@ -138,6 +140,11 @@ export interface CreateCourseRequest {
 export interface CreateModuleRequest {
   name: string;
   semester: number;
+}
+
+/** Body of PUT /api/admin/users/:userId/course; null removes the user from their course. */
+export interface SetUserCourseRequest {
+  courseId: string | null;
 }
 
 /** Body of PATCH /api/admin/users/:userId. */

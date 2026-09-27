@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   MAX_SEMESTER,
   NAME_MAX_LENGTH,
@@ -59,6 +59,7 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     email: users.email,
     username: users.username,
     role: users.role,
+    courseId: courses.id,
     courseName: courses.name,
   };
 
@@ -114,6 +115,20 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     await sendCourse(response, 200, courseId);
   });
 
+  // Only empty courses can be deleted, so no account is removed by accident; modules go with the course.
+  router.delete("/courses/:courseId", async (request, response) => {
+    const { courseId } = request.params;
+    if (!isUuid(courseId)) return sendError(response, 404, "not_found");
+    const hasNoMembers = sql`not exists (select 1 from ${courseMembers} where ${courseMembers}.course_id = ${courses}.id)`;
+    const deleted = await db
+      .delete(courses)
+      .where(and(eq(courses.id, courseId), hasNoMembers))
+      .returning({ id: courses.id });
+    if (deleted.length === 1) return response.status(204).end();
+    const course = await findCourse(courseId);
+    return course ? sendError(response, 409, "course_not_empty") : sendError(response, 404, "not_found");
+  });
+
   router.get("/courses/:courseId/modules", async (request, response) => {
     const { courseId } = request.params;
     if (!isUuid(courseId) || !(await findCourse(courseId))) return sendError(response, 404, "not_found");
@@ -156,6 +171,24 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
       .leftJoin(courses, eq(courses.id, courseMembers.courseId))
       .orderBy(asc(users.email));
     const body: UsersResponse = { users: rows };
+    response.json(body);
+  });
+
+  // A user belongs to at most one course (MVP), so setting a course replaces the old membership.
+  router.put("/users/:userId/course", async (request, response) => {
+    const { userId } = request.params;
+    const courseId = readBody(request).courseId;
+    if (courseId !== null && typeof courseId !== "string") return sendError(response, 400, "invalid_request");
+    if (!isUuid(userId) || !(await findUserEntry(userId))) return sendError(response, 404, "not_found");
+    if (courseId !== null && (!isUuid(courseId) || !(await findCourse(courseId)))) {
+      return sendError(response, 404, "not_found");
+    }
+
+    await db.transaction(async (transaction) => {
+      await transaction.delete(courseMembers).where(eq(courseMembers.userId, userId));
+      if (courseId !== null) await transaction.insert(courseMembers).values({ courseId, userId });
+    });
+    const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
     response.json(body);
   });
 

@@ -22,6 +22,7 @@ export function AdminPage() {
     reloadCourses();
   }, [reloadCourses]);
 
+  // A deleted course disappears from the list, which also closes its module section.
   const selectedCourse = courses.find((course) => course.id === selectedCourseId);
 
   return (
@@ -38,7 +39,7 @@ export function AdminPage() {
         onChanged={reloadCourses}
       />
       {selectedCourse && <ModulesSection course={selectedCourse} onChanged={reloadCourses} />}
-      <UsersSection />
+      <UsersSection courses={courses} onChanged={reloadCourses} />
     </div>
   );
 }

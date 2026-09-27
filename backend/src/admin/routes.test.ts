@@ -95,6 +95,78 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
     });
   });
 
+  describe("deleting courses", () => {
+    it("deletes an empty course together with its modules", async () => {
+      const course = await createCourse("INF24B");
+      await request(app)
+        .post(`/api/admin/courses/${course.id}/modules`)
+        .set("Cookie", adminCookie)
+        .send({ name: "Datenbanken", semester: 3 });
+
+      await request(app).delete(`/api/admin/courses/${course.id}`).set("Cookie", adminCookie).expect(204);
+      await request(app).get(`/api/admin/courses/${course.id}/modules`).set("Cookie", adminCookie).expect(404);
+    });
+
+    it("refuses to delete a course that still has members", async () => {
+      const courses = await request(app).get("/api/admin/courses").set("Cookie", adminCookie);
+      const withMembers = courses.body.courses[0];
+      const response = await request(app).delete(`/api/admin/courses/${withMembers.id}`).set("Cookie", adminCookie);
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({ error: "course_not_empty" });
+    });
+
+    it("answers 404 for an unknown course", async () => {
+      await request(app)
+        .delete("/api/admin/courses/00000000-0000-0000-0000-000000000000")
+        .set("Cookie", adminCookie)
+        .expect(404);
+    });
+  });
+
+  describe("course membership", () => {
+    /** Returns the admin's own user id. */
+    async function adminId(): Promise<string> {
+      const me = await request(app).get("/api/auth/me").set("Cookie", adminCookie);
+      return me.body.user.id;
+    }
+
+    it("moves a user to another course", async () => {
+      const course = await createCourse("INF24B");
+      const response = await request(app)
+        .put(`/api/admin/users/${await adminId()}/course`)
+        .set("Cookie", adminCookie)
+        .send({ courseId: course.id })
+        .expect(200);
+
+      expect(response.body.user).toMatchObject({ courseId: course.id, courseName: "INF24B" });
+      const courses = await request(app).get("/api/admin/courses").set("Cookie", adminCookie);
+      expect(courses.body.courses.map((entry: { memberCount: number }) => entry.memberCount)).toEqual([1, 0]);
+    });
+
+    it("removes a user from their course, which lets the course be deleted", async () => {
+      const courses = await request(app).get("/api/admin/courses").set("Cookie", adminCookie);
+      const response = await request(app)
+        .put(`/api/admin/users/${await adminId()}/course`)
+        .set("Cookie", adminCookie)
+        .send({ courseId: null })
+        .expect(200);
+
+      expect(response.body.user).toMatchObject({ courseId: null, courseName: null });
+      await request(app).delete(`/api/admin/courses/${courses.body.courses[0].id}`).set("Cookie", adminCookie).expect(204);
+    });
+
+    it("answers 404 for an unknown course and 400 for a malformed body", async () => {
+      const userId = await adminId();
+      await request(app)
+        .put(`/api/admin/users/${userId}/course`)
+        .set("Cookie", adminCookie)
+        .send({ courseId: "00000000-0000-0000-0000-000000000000" })
+        .expect(404);
+      await request(app).put(`/api/admin/users/${userId}/course`).set("Cookie", adminCookie).send({}).expect(400);
+    });
+  });
+
   describe("modules", () => {
     it("creates modules and lists them by semester, then name", async () => {
       const course = await createCourse("INF24B");
@@ -138,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
       const response = await request(app).get("/api/admin/users").set("Cookie", adminCookie).expect(200);
 
       expect(response.body.users).toEqual([
-        expect.objectContaining({ email: "admin@dhbw.example", role: "admin", courseName: "WWI 2024" }),
+        expect.objectContaining({ email: "admin@dhbw.example", role: "admin", courseName: "WWI 2024", courseId: expect.any(String) }),
       ]);
     });
 

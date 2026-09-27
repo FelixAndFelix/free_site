@@ -9,8 +9,8 @@ const MODULES = [
   { id: "m2", courseId: "c1", name: "Datenbanken", semester: 3 },
 ];
 const USERS = [
-  { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin", courseName: "INF24B" },
-  { id: "u1", email: "student@dhbw.example", username: "student", role: "user", courseName: "INF24B" },
+  { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin", courseId: "c1", courseName: "INF24B" },
+  { id: "u1", email: "student@dhbw.example", username: "student", role: "user", courseId: "c1", courseName: "INF24B" },
 ];
 
 /**
@@ -110,6 +110,40 @@ describe("AdminPage", () => {
     fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
 
     await vi.waitFor(() => expect(sentBodies(fetchMock, "DELETE", "/api/admin/modules/m2")).toHaveLength(1));
+  });
+
+  it("allows deleting only a course without members", async () => {
+    const empty = { ...COURSE, id: "c2", name: "INF25A", joinCode: "INF25A-AAAAAAAA", memberCount: 0 };
+    const fetchMock = mockAdminApi({
+      "GET /api/admin/courses": { status: 200, body: { courses: [COURSE, empty] } },
+      "DELETE /api/admin/courses/c2": { status: 204 },
+    });
+    renderAt("/admin");
+
+    const fullRow = (await screen.findByText("INF24B-7KQ2XMPA")).closest("li")!;
+    expect(within(fullRow).getByRole("button", { name: "Delete" })).toBeDisabled();
+    const emptyRow = screen.getByText("INF25A-AAAAAAAA").closest("li")!;
+    fireEvent.click(within(emptyRow).getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => expect(sentBodies(fetchMock, "DELETE", "/api/admin/courses/c2")).toHaveLength(1));
+  });
+
+  it("moves a user to another course or out of their course", async () => {
+    const other = { ...COURSE, id: "c2", name: "INF25A", joinCode: "INF25A-AAAAAAAA", memberCount: 0 };
+    const fetchMock = mockAdminApi({
+      "GET /api/admin/courses": { status: 200, body: { courses: [COURSE, other] } },
+      "PUT /api/admin/users/u1/course": { status: 200, body: { user: USERS[1] } },
+    });
+    renderAt("/admin");
+
+    const select = await screen.findByLabelText("Course of student@dhbw.example");
+    fireEvent.change(select, { target: { value: "c2" } });
+    await vi.waitFor(() => expect(sentBodies(fetchMock, "PUT", "/api/admin/users/u1/course")).toHaveLength(1));
+    fireEvent.change(select, { target: { value: "" } });
+
+    await vi.waitFor(() =>
+      expect(sentBodies(fetchMock, "PUT", "/api/admin/users/u1/course")).toEqual([{ courseId: "c2" }, { courseId: null }]),
+    );
   });
 
   it("promotes another user but offers no button for yourself", async () => {
