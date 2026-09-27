@@ -30,6 +30,7 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       sendMail: async (mail) => void sentMails.push(mail),
       allowedEmailDomains: ["dhbw.example"],
       secureCookies: false,
+      appUrl: "https://free.example",
       now: () => new Date(time),
     });
     app = createApp({ checkDatabase: async () => true, authRouter, trustProxy: "loopback" });

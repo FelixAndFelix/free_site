@@ -20,6 +20,7 @@ const authRouter = createAuthRouter({
   sendMail: createSendMail(config),
   allowedEmailDomains: config.allowedEmailDomains,
   secureCookies: config.isProduction,
+  appUrl: config.appUrl,
 });
 
 createApp({ checkDatabase: database.check, authRouter, trustProxy: config.trustProxy }).listen(config.port, () => {

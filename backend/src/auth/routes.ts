@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type { ApiErrorCode, AuthUser, UserResponse } from "@free-site/shared";
 import type { Db } from "../database";
 import type { SendMail } from "../mail";
+import { buildCodeMail } from "../mailTemplates";
 import { courseMembers, courses, users } from "../schema";
 import { consumeEmailCode, issueEmailCode } from "./emailCodes";
 import { hashPassword, isValidPassword, verifyPassword } from "./passwords";
@@ -21,6 +22,7 @@ export interface AuthDependencies {
   sendMail: SendMail;
   allowedEmailDomains: string[];
   secureCookies: boolean;
+  appUrl: string;
   now?: () => Date;
 }
 
@@ -63,7 +65,14 @@ function normalizeEmail(email: string): string | null {
  * Builds the /api/auth router: registration, login, logout, current user and password reset.
  * @param {AuthDependencies} dependencies
  */
-export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCookies, now = () => new Date() }: AuthDependencies) {
+export function createAuthRouter({
+  db,
+  sendMail,
+  allowedEmailDomains,
+  secureCookies,
+  appUrl,
+  now = () => new Date(),
+}: AuthDependencies) {
   const router = Router();
   const sendCodeLimiter = createWindowLimiter({ limit: SEND_CODE_LIMIT_PER_IP, windowMs: HOUR_MS, now });
   const loginThrottle = createLoginThrottle(now);
@@ -116,11 +125,7 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
     if (!(await findUserByEmail(email))) {
       const code = await issueEmailCode(db, email, "register", now());
       if (code) {
-        await sendMail({
-          to: email,
-          subject: "Your free_site verification code",
-          text: `Your verification code is ${code}. It is valid for 10 minutes.`,
-        });
+        await sendMail(buildCodeMail({ to: email, purpose: "register", code, appUrl }));
       }
     }
     response.status(202).json({});
@@ -190,11 +195,7 @@ export function createAuthRouter({ db, sendMail, allowedEmailDomains, secureCook
       const code = await issueEmailCode(db, email, "reset", now());
       if (code) {
         // A failed send is logged, not returned, so the response never depends on the account existing.
-        await sendMail({
-          to: email,
-          subject: "Your free_site password reset code",
-          text: `Your password reset code is ${code}. It is valid for 10 minutes.`,
-        }).catch((error: unknown) => console.error("reset mail failed", error));
+        await sendMail(buildCodeMail({ to: email, purpose: "reset", code, appUrl })).catch((error: unknown) => console.error("reset mail failed", error));
       }
     }
     response.status(202).json({});

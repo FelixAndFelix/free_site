@@ -2,6 +2,7 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 export type SendMail = (mail: Mail) => Promise<void>;
@@ -29,11 +30,11 @@ export function createSendMail({ isProduction, resendApiKey, mailFrom }: MailCon
  * @param {string} from
  */
 function createResendSendMail(apiKey: string, from: string): SendMail {
-  return async ({ to, subject, text }) => {
+  return async ({ to, subject, text, html }) => {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, subject, text }),
+      body: JSON.stringify({ from, to, subject, text, html }),
     });
     if (!response.ok) throw new Error(`Resend responded ${response.status}`);
   };
