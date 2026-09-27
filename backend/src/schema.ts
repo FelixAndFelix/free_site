@@ -78,6 +78,7 @@ export const modules = pgTable(
 
 // One vote per user and module, changed by upsert. Votes are linked to user_id and therefore
 // not anonymous towards the operator (see the privacy notes in planning/Decisions.md).
+// A withdrawn vote keeps its row with vote_value null, so updated_at still drives the change cooldown.
 export const votes = pgTable(
   "votes",
   {
@@ -87,7 +88,7 @@ export const votes = pgTable(
     moduleId: uuid("module_id")
       .notNull()
       .references(() => modules.id, { onDelete: "cascade" }),
-    value: voteValue("vote_value").notNull(),
+    value: voteValue("vote_value"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("votes_module_id_idx").on(table.moduleId)],

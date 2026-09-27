@@ -4,10 +4,13 @@ import { createDatabase } from "../database";
 import type { Mail } from "../mail";
 import { TEST_SETUP_CODE, createTestApp, registerUser, resetDatabase } from "../testHelpers";
 
+const COOLDOWN_MS = 15 * 60_000;
+
 describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () => {
   const database = createDatabase(process.env.DATABASE_URL ?? "");
   let sentMails: Mail[];
   let app: ReturnType<typeof createTestApp>;
+  let time: number;
   let adminCookie: string;
   let studentCookie: string;
   let courseId: string;
@@ -18,7 +21,8 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
   beforeEach(async () => {
     await resetDatabase(database.db);
     sentMails = [];
-    app = createTestApp({ db: database.db, sentMails, now: () => new Date() });
+    time = Date.parse("2026-10-01T10:00:00Z");
+    app = createTestApp({ db: database.db, sentMails, now: () => new Date(time) });
     adminCookie = await registerUser(app, sentMails, { email: "admin@dhbw.example", adminSetupCode: TEST_SETUP_CODE });
     studentCookie = await registerUser(app, sentMails, { email: "student@dhbw.example" });
     const courses = await request(app).get("/api/admin/courses").set("Cookie", adminCookie);
@@ -70,6 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
   it("changes a vote instead of adding a second one", async () => {
     const moduleId = await createModule("Datenbanken", 3);
     await vote(studentCookie, moduleId, "free").expect(200);
+    time += COOLDOWN_MS;
     const response = await vote(studentCookie, moduleId, "possible").expect(200);
 
     expect(response.body.module).toMatchObject({ counts: { free: 0, possible: 1, impossible: 0 }, myVote: "possible" });
@@ -78,12 +83,68 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
   it("withdraws a vote", async () => {
     const moduleId = await createModule("Datenbanken", 3);
     await vote(studentCookie, moduleId, "free").expect(200);
+    time += COOLDOWN_MS;
     const response = await request(app)
       .delete(`/api/modules/${moduleId}/vote`)
       .set("Cookie", studentCookie)
       .expect(200);
 
     expect(response.body.module).toMatchObject({ counts: { free: 0, possible: 0, impossible: 0 }, myVote: null });
+  });
+
+  describe("change cooldown", () => {
+    it("blocks a change within 15 minutes and says when it is possible again", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      await vote(studentCookie, moduleId, "free").expect(200);
+      time += COOLDOWN_MS - 1000;
+
+      const response = await vote(studentCookie, moduleId, "impossible");
+      expect(response.status).toBe(429);
+      expect(response.body).toEqual({ error: "vote_cooldown", retryAt: "2026-10-01T10:15:00.000Z" });
+      expect(response.headers["retry-after"]).toBe("1");
+      time += 1000;
+      await vote(studentCookie, moduleId, "impossible").expect(200);
+    });
+
+    it("tells the overview when the vote can change again", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      const before = await request(app).get("/api/overview").set("Cookie", studentCookie);
+      expect(before.body.modules[0].canChangeAt).toBeNull();
+
+      const voted = await vote(studentCookie, moduleId, "free").expect(200);
+      expect(voted.body.module.canChangeAt).toBe("2026-10-01T10:15:00.000Z");
+      time += COOLDOWN_MS;
+      const after = await request(app).get("/api/overview").set("Cookie", studentCookie);
+      expect(after.body.modules[0].canChangeAt).toBeNull();
+    });
+
+    it("counts withdrawing as a change, so withdraw-then-vote cannot skip the cooldown", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      await vote(studentCookie, moduleId, "free").expect(200);
+      await request(app).delete(`/api/modules/${moduleId}/vote`).set("Cookie", studentCookie).expect(429);
+
+      time += COOLDOWN_MS;
+      await request(app).delete(`/api/modules/${moduleId}/vote`).set("Cookie", studentCookie).expect(200);
+      await vote(studentCookie, moduleId, "impossible").expect(429);
+    });
+
+    it("lets a repeated identical vote through without restarting the cooldown", async () => {
+      const moduleId = await createModule("Datenbanken", 3);
+      await vote(studentCookie, moduleId, "free").expect(200);
+      time += 10 * 60_000;
+      await vote(studentCookie, moduleId, "free").expect(200);
+      time += 5 * 60_000;
+      await vote(studentCookie, moduleId, "possible").expect(200);
+    });
+
+    it("applies per module and per user", async () => {
+      const first = await createModule("Datenbanken", 3);
+      const second = await createModule("Mathematik I", 1);
+      await vote(studentCookie, first, "free").expect(200);
+
+      await vote(studentCookie, second, "free").expect(200);
+      await vote(adminCookie, first, "impossible").expect(200);
+    });
   });
 
   it("refuses an unknown vote value", async () => {

@@ -71,7 +71,7 @@ describe.skipIf(!process.env.DATABASE_URL)("vote history (real Postgres)", () =>
 
   it("keeps only the last state of a day when someone changes their mind", async () => {
     await vote(studentCookie, "free");
-    time += 60_000;
+    time += 20 * 60_000;
     await vote(studentCookie, "possible");
 
     expect(await history()).toEqual([{ day: "2026-10-01", counts: { free: 0, possible: 1, impossible: 0 } }]);
@@ -113,7 +113,8 @@ describe.skipIf(!process.env.DATABASE_URL)("vote history (real Postgres)", () =>
     const other = await request(app).post("/api/admin/courses").set("Cookie", adminCookie).send({ name: "INF25A" });
     const users = await request(app).get("/api/admin/users").set("Cookie", adminCookie);
     const student = users.body.users.find((user: { email: string }) => user.email === "student@dhbw.example");
-    time += 24 * 60 * 60 * 1000;
+    // A minute later, well within the student's cooldown: the admin action is not blocked by it.
+    time += 60_000;
     await request(app)
       .put(`/api/admin/users/${student.id}/course`)
       .set("Cookie", adminCookie)
@@ -122,7 +123,7 @@ describe.skipIf(!process.env.DATABASE_URL)("vote history (real Postgres)", () =>
 
     const response = await request(app).get(`/api/modules/${moduleId}`).set("Cookie", adminCookie).expect(200);
     expect(response.body.module.counts).toEqual({ free: 0, possible: 0, impossible: 0 });
-    expect(response.body.history.at(-1)).toEqual({ day: "2026-10-02", counts: { free: 0, possible: 0, impossible: 0 } });
+    expect(response.body.history.at(-1)).toEqual({ day: "2026-10-01", counts: { free: 0, possible: 0, impossible: 0 } });
   });
 
   it("answers 404 for a module of another course", async () => {

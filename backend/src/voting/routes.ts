@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
   VOTE_VALUES,
+  type ApiError,
   type AuthUser,
   type ModuleDetailResponse,
   type ModuleOverview,
@@ -14,7 +15,7 @@ import type { Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, votes } from "../schema";
 import { loadVoteHistory } from "./history";
-import { changeVote } from "./votes";
+import { changeVote, cooldownEnd } from "./votes";
 
 export interface VotingDependencies {
   db: Db;
@@ -55,13 +56,20 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
         possible: countOf("possible"),
         impossible: countOf("impossible"),
         myVote: sql<VoteValue | null>`max(${votes}.vote_value::text) filter (where ${votes}.user_id = ${userId})`,
+        // Raw sql`` bypasses Drizzle's date mapping, so the timestamp arrives as a string.
+        myUpdatedAt: sql<string | null>`max(${votes}.updated_at) filter (where ${votes}.user_id = ${userId})`,
       })
       .from(modules)
       .leftJoin(votes, eq(votes.moduleId, modules.id))
       .where(moduleId ? and(eq(modules.courseId, courseId), eq(modules.id, moduleId)) : eq(modules.courseId, courseId))
       .groupBy(modules.id)
       .orderBy(asc(modules.semester), asc(modules.name));
-    return rows.map(({ free, possible, impossible, ...module }) => ({ ...module, counts: { free, possible, impossible } }));
+    const time = now();
+    return rows.map(({ free, possible, impossible, myUpdatedAt, ...module }) => ({
+      ...module,
+      counts: { free, possible, impossible },
+      canChangeAt: cooldownEnd(myUpdatedAt ? new Date(myUpdatedAt) : null, time)?.toISOString() ?? null,
+    }));
   }
 
   /**
@@ -74,6 +82,13 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     if (!course || !isUuid(moduleId)) return null;
     const [module] = await loadOverview(course.id, user.id, moduleId);
     return module ? { user, course, module } : null;
+  }
+
+  /** Answers 429 with the time from which the vote can be changed again. */
+  function sendCooldown(response: Response, retryAt: Date) {
+    const seconds = Math.max(1, Math.ceil((retryAt.getTime() - now().getTime()) / 1000));
+    const body: ApiError = { error: "vote_cooldown", retryAt: retryAt.toISOString() };
+    response.status(429).set("Retry-After", String(seconds)).json(body);
   }
 
   /** Sends the refreshed module after a vote change. */
@@ -106,7 +121,13 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
 
-    await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: value as VoteValue, now: now() });
+    const result = await changeVote(db, {
+      userId: target.user.id,
+      moduleId: target.module.id,
+      value: value as VoteValue,
+      now: now(),
+    });
+    if (!result.ok) return sendCooldown(response, result.retryAt);
     await sendModule(response, target.course.id, target.user.id, target.module.id);
   });
 
@@ -114,7 +135,8 @@ export function createVotingRouter({ db, now = () => new Date() }: VotingDepende
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
 
-    await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: null, now: now() });
+    const result = await changeVote(db, { userId: target.user.id, moduleId: target.module.id, value: null, now: now() });
+    if (!result.ok) return sendCooldown(response, result.retryAt);
     await sendModule(response, target.course.id, target.user.id, target.module.id);
   });
 

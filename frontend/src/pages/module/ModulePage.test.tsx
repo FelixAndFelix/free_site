@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockApi, renderAt } from "../../testUtils";
 
 const USER = { id: "1", email: "student@dhbw.example", username: "student", role: "user" };
-const MODULE = { id: "m1", name: "Datenbanken", semester: 3, counts: { free: 1, possible: 2, impossible: 0 }, myVote: null };
+const MODULE = {
+  id: "m1",
+  name: "Datenbanken",
+  semester: 3,
+  counts: { free: 1, possible: 2, impossible: 0 },
+  myVote: null,
+  canChangeAt: null,
+};
 const HISTORY = [
   { day: "2026-10-01", counts: { free: 3, possible: 0, impossible: 0 } },
   { day: "2026-10-02", counts: { free: 2, possible: 1, impossible: 0 } },
