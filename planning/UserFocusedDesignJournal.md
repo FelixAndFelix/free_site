@@ -12,6 +12,7 @@ Ziele des Dokuments sind:
 ## Begriffsbuch
 
 - User: Ein Student, der die Web-App verwendet.
+- Username: Öffentlicher Name eines Users (3–20 Zeichen), der in der App statt der E-Mail angezeigt wird.
 - Vote: Eine Abstimmung, die ein Student zu einem Modul gibt.
 - Kurs: Jahrgangskurs, in dem der Student ist.
 - Modul: Ein Modul, welches in einzelnen Vorlesungen vorgestellt wird. Beide Begriffe meinen die gleiche Entität.
@@ -43,7 +44,8 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
   - Make or Buy ist somit entschieden: Make für die Erfahrung.
   - Damit man Daten über die Vorlesungen über die vielen Semester sammeln kann. Es entsteht ein Modul-Logbuch.
 - Als Anwender will ich ... tun, um ... Ziele zu erreichen.
-  1. Als Anwender will ich mich mit meiner DHBW-Mail und dem Kurs-Code registrieren, die Mail per Code bestätigen und ein Passwort setzen, um abstimmen zu können.
+  1. Als Anwender will ich mich mit meiner DHBW-Mail, einem Username und dem Kurs-Code registrieren, die Mail per Code bestätigen und ein Passwort setzen, um abstimmen zu können.
+  1c. Als Anwender will ich in der App unter meinem Username statt meiner E-Mail erscheinen, damit meine E-Mail nicht überall angezeigt wird.
   1a. Als Anwender will ich mich mit E-Mail und Passwort oder optional per Passkey einloggen.
   1b. Als Anwender will ich mein Passwort per E-Mail-Code zurücksetzen können, um bei Vergessen nicht meinen Zugang zu verlieren.
   2. Als Anwender will ich zur Machbarkeit aktueller Module aus dem Semester abstimmen, um meine Meinung einzubringen.
@@ -71,7 +73,7 @@ Bisher tauschen sich Studenten in Gesprächen über die Machbarkeit von Modulen 
 ## 2) Datenmodell
 
 - Was sind meine Daten?
-  - **users:** `id` (UUID), `email` (unique, lowercase), `password_hash` (Argon2id), `role` (`user`/`admin`), `created_at`.
+  - **users:** `id` (UUID), `email` (unique, lowercase), `username` (eindeutig ohne Groß-/Kleinschreibung, wird statt der E-Mail angezeigt), `password_hash` (Argon2id), `role` (`user`/`admin`), `created_at`.
   - **email_codes:** `email`, `purpose` (`register`/`reset`), `code_hash`, `expires_at`, `attempts`, `created_at`.
   - **passkey_credentials (optional):** `credential_id`, `public_key`, `user_id`, `sign_count`, `transports`.
   - **courses:** `id`, `name`, `join_code`. **course_members:** `course_id`, `user_id`.
@@ -163,7 +165,7 @@ Folgende Features nach der Erstimplementierung / Deployment:
 ## Datenminimierung & Rollenvergabe
 
 - Welche Daten müssen User von sich preisgeben?
-  - DHBW-E-Mail, Kurs-Code und ein Passwort.
+  - DHBW-E-Mail, Username, Kurs-Code und ein Passwort.
 - Kann ich diese Daten minimieren oder pseudonymisieren?
   - Nur eingeschränkt: Die E-Mail wird für den Mail-Versand im Klartext benötigt. `user_id` ist eine zufällige UUID, Passwörter werden nur gehasht gespeichert.
 - Sind diese Daten personenbezogen und wie gehe ich damit um?

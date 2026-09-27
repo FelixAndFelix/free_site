@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   MAX_SEMESTER,
   NAME_MAX_LENGTH,
@@ -18,7 +18,7 @@ import {
 } from "@free-site/shared";
 import { requireRole } from "../auth/middleware";
 import { generateJoinCode } from "../courses";
-import type { Db } from "../database";
+import { isUniqueViolation, type Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
 import { courseMembers, courses, modules, users } from "../schema";
 
@@ -26,8 +26,6 @@ export interface AdminDependencies {
   db: Db;
   now?: () => Date;
 }
-
-const UNIQUE_VIOLATION = "23505";
 
 /**
  * Trims a name and returns it if it is 1 to NAME_MAX_LENGTH characters long, otherwise null.
@@ -37,15 +35,6 @@ function readName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const name = value.trim();
   return name.length > 0 && name.length <= NAME_MAX_LENGTH ? name : null;
-}
-
-/**
- * True if the error is Postgres' unique constraint violation (possibly wrapped by Drizzle).
- * @param {unknown} error
- */
-function isUniqueViolation(error: unknown): boolean {
-  const { code, cause } = error as { code?: string; cause?: { code?: string } };
-  return code === UNIQUE_VIOLATION || cause?.code === UNIQUE_VIOLATION;
 }
 
 /**
@@ -65,7 +54,14 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     memberCount: sql<number>`(select count(*)::int from ${courseMembers} where ${courseMembers}.course_id = ${courses}.id)`,
     moduleCount: sql<number>`(select count(*)::int from ${modules} where ${modules}.course_id = ${courses}.id)`,
   };
-  const userColumns = { id: users.id, email: users.email, role: users.role, courseName: courses.name };
+  const userColumns = {
+    id: users.id,
+    email: users.email,
+    username: users.username,
+    role: users.role,
+    courseId: courses.id,
+    courseName: courses.name,
+  };
 
   /** Loads one course with its counts, or undefined. */
   async function findCourse(courseId: string): Promise<AdminCourse | undefined> {
@@ -119,6 +115,20 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
     await sendCourse(response, 200, courseId);
   });
 
+  // Only empty courses can be deleted, so no account is removed by accident; modules go with the course.
+  router.delete("/courses/:courseId", async (request, response) => {
+    const { courseId } = request.params;
+    if (!isUuid(courseId)) return sendError(response, 404, "not_found");
+    const hasNoMembers = sql`not exists (select 1 from ${courseMembers} where ${courseMembers}.course_id = ${courses}.id)`;
+    const deleted = await db
+      .delete(courses)
+      .where(and(eq(courses.id, courseId), hasNoMembers))
+      .returning({ id: courses.id });
+    if (deleted.length === 1) return response.status(204).end();
+    const course = await findCourse(courseId);
+    return course ? sendError(response, 409, "course_not_empty") : sendError(response, 404, "not_found");
+  });
+
   router.get("/courses/:courseId/modules", async (request, response) => {
     const { courseId } = request.params;
     if (!isUuid(courseId) || !(await findCourse(courseId))) return sendError(response, 404, "not_found");
@@ -161,6 +171,24 @@ export function createAdminRouter({ db, now = () => new Date() }: AdminDependenc
       .leftJoin(courses, eq(courses.id, courseMembers.courseId))
       .orderBy(asc(users.email));
     const body: UsersResponse = { users: rows };
+    response.json(body);
+  });
+
+  // A user belongs to at most one course (MVP), so setting a course replaces the old membership.
+  router.put("/users/:userId/course", async (request, response) => {
+    const { userId } = request.params;
+    const courseId = readBody(request).courseId;
+    if (courseId !== null && typeof courseId !== "string") return sendError(response, 400, "invalid_request");
+    if (!isUuid(userId) || !(await findUserEntry(userId))) return sendError(response, 404, "not_found");
+    if (courseId !== null && (!isUuid(courseId) || !(await findCourse(courseId)))) {
+      return sendError(response, 404, "not_found");
+    }
+
+    await db.transaction(async (transaction) => {
+      await transaction.delete(courseMembers).where(eq(courseMembers.userId, userId));
+      if (courseId !== null) await transaction.insert(courseMembers).values({ courseId, userId });
+    });
+    const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
     response.json(body);
   });
 

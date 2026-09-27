@@ -29,6 +29,15 @@ export function CoursesSection({ courses, selectedCourseId, onSelect, onChanged 
     onSelect(result.data.course.id);
   }
 
+  /** Deletes an empty course and its modules after confirmation. */
+  async function deleteCourse(course: AdminCourse) {
+    if (!window.confirm(`Delete ${course.name} and its ${count(course.moduleCount, "module")}?`)) return;
+    const result = await apiRequest(`/api/admin/courses/${course.id}`, { method: "DELETE" });
+    if (!result.ok) return setError(errorMessage(result.error));
+    setError("");
+    await onChanged();
+  }
+
   /** Replaces the join code of a course after confirmation. */
   async function rotateJoinCode(course: AdminCourse) {
     if (!window.confirm(`Replace the join code of ${course.name}? The old code stops working immediately.`)) return;
@@ -60,7 +69,18 @@ export function CoursesSection({ courses, selectedCourseId, onSelect, onChanged 
               <button type="button" className="secondary" onClick={() => rotateJoinCode(course)}>
                 New join code
               </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={course.memberCount > 0}
+                onClick={() => deleteCourse(course)}
+              >
+                Delete
+              </button>
             </div>
+            {course.memberCount > 0 && (
+              <span className="muted">To delete this course, first move or remove its members under Users.</span>
+            )}
           </li>
         ))}
       </ul>

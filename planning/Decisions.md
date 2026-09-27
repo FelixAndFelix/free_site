@@ -5,7 +5,8 @@ Single source of truth for architecture and process decisions. If another planni
 | Area | Decision | Reason |
 |---|---|---|
 | Auth | DHBW email verified by a 6-digit code, then a password. Passkey (WebAuthn via `simplewebauthn`) is an optional convenience. Course join code required at registration. | Email proves DHBW membership; the course code places the user in a course; passkeys add convenient login. |
-| Registration | Email + course code -> emailed code -> set password -> optionally add a passkey. One course per user in the MVP. | Simplest flow that gates on both domain and course. |
+| Registration | Email + username + course code -> emailed code -> set password -> optionally add a passkey. One course per user in the MVP. | Simplest flow that gates on both domain and course. |
+| Username | Required at registration, 3–20 letters, digits, `.`, `_` or `-`, unique ignoring case. Shown in the app instead of the email; admins see both. Can be changed later. Accounts from before usernames existed choose one right after login. | Users do not want their email shown everywhere; case-insensitive uniqueness prevents look-alike names such as `Felix` and `felix`. |
 | Login | Email + password, or passkey if set up. | Conventional model users expect. |
 | Password reset | Email code, then a new password. Revokes all sessions of that user. Replaces the former recovery code. | Email is the recovery path, so no recovery-code slice. |
 | Email storage | Plaintext `users.email`, unique, lowercased. | Needed to send mail on our own initiative. The privacy screen must state that the operator can link an email to a vote. |
@@ -19,6 +20,7 @@ Single source of truth for architecture and process decisions. If another planni
 | Vote link | `votes(user_id, modul_id, vote_value, updated_at)`, composite PK `(user_id, modul_id)`, changed via upsert. | KISS. Votes are linked to `user_id`, and `users` holds the email, so votes are not anonymous towards the operator. |
 | Vote values | Enum `free` / `possible` / `impossible` (UI: green / yellow / red). | Matches the app's purpose; a single enum column. |
 | Session | Server-side session stored in Postgres, opaque ID in an `HttpOnly; Secure; SameSite=Lax` cookie. | Not readable by XSS, revocable server-side. |
+| Course management | Admins are global: every admin manages all courses, modules, join codes and users. Admins create and delete courses and modules, rotate join codes, and move a user to another course or remove them from their course. A course can only be deleted when it has no members; its modules go with it. | Deleting an empty course cannot remove accounts by accident. Global admins fit a small app run by a few trusted people. |
 | Admin | `ADMIN_SETUP_CODE` env var used at registration creates the first admin; it is accepted only while no admin exists. `users.role` is `user` or `admin`. Admins can promote and demote others, never themselves. | The code cannot mint a second admin even if it leaks, so rotating it is optional. The admin's email must still pass the domain check, and a course code is still required. |
 | Backend | Node.js, TypeScript, Express, Drizzle ORM, PostgreSQL. | Best `simplewebauthn` support; typed parameterized queries; readable SQL migrations. |
 | Frontend | Vite, React, TypeScript, React Router, plain mobile-first CSS. | Small app (4 screens); matches `DevelopingRules.md`. Screens are designed fresh later; the old Stitch prototype is discarded. |

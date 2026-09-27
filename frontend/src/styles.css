@@ -24,6 +24,10 @@ body {
   border-radius: 0.5rem;
 }
 
+.card p {
+  margin: 0;
+}
+
 .card h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -189,4 +193,9 @@ details[open] summary {
   .inline-form .field:first-child {
     flex: 1;
   }
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

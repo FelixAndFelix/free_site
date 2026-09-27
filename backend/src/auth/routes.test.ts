@@ -53,10 +53,10 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     });
 
     it("sets an HttpOnly, SameSite=Lax session cookie", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const response = await request(app)
         .post("/api/auth/register/complete")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, code: lastCode(), password: PASSWORD });
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, code: lastCode(), password: PASSWORD });
 
       const cookie = (response.headers["set-cookie"] as unknown as string[])[0]!;
       expect(cookie).toContain("HttpOnly");
@@ -66,7 +66,7 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     it("rejects a domain outside the allowlist without sending mail", async () => {
       const response = await request(app)
         .post("/api/auth/register/start")
-        .send({ email: "student@dhbw.example.evil.com", courseCode: COURSE_CODE });
+        .send({ email: "student@dhbw.example.evil.com", username: "student", courseCode: COURSE_CODE });
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ error: "email_domain_not_allowed" });
@@ -74,17 +74,17 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     });
 
     it("rejects an unknown course code without sending mail", async () => {
-      const response = await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: "NOPE" });
+      const response = await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: "NOPE" });
 
       expect(response.body).toEqual({ error: "invalid_course_code" });
       expect(sentMails).toHaveLength(0);
     });
 
     it("rejects a password shorter than 10 characters", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const response = await request(app)
         .post("/api/auth/register/complete")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, code: lastCode(), password: "short" });
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, code: lastCode(), password: "short" });
 
       expect(response.body).toEqual({ error: "invalid_password" });
     });
@@ -93,12 +93,15 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       await register();
       sentMails = [];
 
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE }).expect(202);
+      await request(app)
+        .post("/api/auth/register/start")
+        .send({ email: EMAIL, username: "someone_else", courseCode: COURSE_CODE })
+        .expect(202);
       expect(sentMails).toHaveLength(0);
     });
 
     it("sends at most one code per address per 60 seconds", async () => {
-      const start = () => request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      const start = () => request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       await start();
       await start();
       expect(sentMails).toHaveLength(1);
@@ -112,10 +115,10 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       for (let index = 0; index < 5; index++) {
         await request(app)
           .post("/api/auth/register/start")
-          .send({ email: `s${index}@dhbw.example`, courseCode: COURSE_CODE })
+          .send({ email: `s${index}@dhbw.example`, username: "student", courseCode: COURSE_CODE })
           .expect(202);
       }
-      const response = await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      const response = await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       expect(response.status).toBe(429);
     });
 
@@ -125,7 +128,7 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
         request(app)
           .post("/api/auth/register/start")
           .set("X-Forwarded-For", clientIp)
-          .send({ email: `s${index}@dhbw.example`, courseCode: COURSE_CODE });
+          .send({ email: `s${index}@dhbw.example`, username: "student", courseCode: COURSE_CODE });
 
       for (let index = 0; index < 5; index++) await startFrom("203.0.113.1", index).expect(202);
       await startFrom("203.0.113.1", 5).expect(429);
@@ -135,10 +138,10 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
 
   describe("email codes", () => {
     /** Tries to complete the registration with the given code. */
-    function complete(code: string) {
+    function complete(code: string, username = "student") {
       return request(app)
         .post("/api/auth/register/complete")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, code, password: PASSWORD });
+        .send({ email: EMAIL, username, courseCode: COURSE_CODE, code, password: PASSWORD });
     }
 
     /** A 6-digit code guaranteed to differ from the real one. */
@@ -147,30 +150,89 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     }
 
     it("is single-use", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const code = lastCode();
       await complete(code).expect(201);
-      expect((await complete(code)).body).toEqual({ error: "invalid_code" });
+      expect((await complete(code, "another_name")).body).toEqual({ error: "invalid_code" });
     });
 
     it("expires after 10 minutes", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       time += 10 * 60_000;
       expect((await complete(lastCode())).body).toEqual({ error: "invalid_code" });
     });
 
     it("is invalidated after 5 wrong attempts", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const code = lastCode();
       for (let attempt = 0; attempt < 5; attempt++) await complete(wrongCode(code)).expect(400);
       expect((await complete(code)).body).toEqual({ error: "invalid_code" });
     });
 
     it("still accepts the right code after 4 wrong attempts", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const code = lastCode();
       for (let attempt = 0; attempt < 4; attempt++) await complete(wrongCode(code)).expect(400);
       await complete(code).expect(201);
+    });
+  });
+
+  describe("usernames", () => {
+    it("stores the username and returns it with the user", async () => {
+      const cookie = await register(EMAIL);
+
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie).expect(200);
+      expect(me.body.user).toMatchObject({ email: EMAIL, username: "student" });
+    });
+
+    it("rejects a username that breaks the rules before sending mail", async () => {
+      for (const username of ["ab", "has space", "a".repeat(21), "semi;colon"]) {
+        const response = await request(app)
+          .post("/api/auth/register/start")
+          .send({ email: EMAIL, username, courseCode: COURSE_CODE });
+        expect(response.body).toEqual({ error: "invalid_username" });
+      }
+      expect(sentMails).toHaveLength(0);
+    });
+
+    it("accepts umlauts, digits, dots, underscores and hyphens", async () => {
+      await registerUser(app, sentMails, { email: EMAIL, username: "Jürgen.M_2-b" });
+    });
+
+    it("rejects a username that is taken, ignoring upper and lower case", async () => {
+      await registerUser(app, sentMails, { email: "first@dhbw.example", username: "Felix" });
+      const response = await request(app)
+        .post("/api/auth/register/start")
+        .send({ email: EMAIL, username: "felix", courseCode: COURSE_CODE });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({ error: "username_taken" });
+    });
+
+    it("lets a logged-in user set or change their username", async () => {
+      const cookie = await register(EMAIL);
+      const response = await request(app)
+        .put("/api/auth/username")
+        .set("Cookie", cookie)
+        .send({ username: "  new_name  " })
+        .expect(200);
+
+      expect(response.body.user.username).toBe("new_name");
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie);
+      expect(me.body.user.username).toBe("new_name");
+    });
+
+    it("allows keeping your own username in different case, but not taking someone else's", async () => {
+      await registerUser(app, sentMails, { email: "first@dhbw.example", username: "Felix" });
+      const cookie = await register(EMAIL);
+
+      await request(app).put("/api/auth/username").set("Cookie", cookie).send({ username: "STUDENT" }).expect(200);
+      const taken = await request(app).put("/api/auth/username").set("Cookie", cookie).send({ username: "FELIX" });
+      expect(taken.body).toEqual({ error: "username_taken" });
+    });
+
+    it("requires a session to set a username", async () => {
+      await request(app).put("/api/auth/username").send({ username: "someone" }).expect(401);
     });
   });
 
@@ -185,7 +247,7 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     it("rejects a wrong setup code before sending mail", async () => {
       const response = await request(app)
         .post("/api/auth/register/start")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, adminSetupCode: "wrong" });
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, adminSetupCode: "wrong" });
 
       expect(response.body).toEqual({ error: "invalid_setup_code" });
       expect(sentMails).toHaveLength(0);
@@ -195,7 +257,7 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       await register("first@dhbw.example", TEST_SETUP_CODE);
       const response = await request(app)
         .post("/api/auth/register/start")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, adminSetupCode: TEST_SETUP_CODE });
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, adminSetupCode: TEST_SETUP_CODE });
 
       expect(response.body).toEqual({ error: "invalid_setup_code" });
     });
@@ -316,11 +378,11 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     });
 
     it("does not accept a registration code for a reset", async () => {
-      await request(app).post("/api/auth/register/start").send({ email: EMAIL, courseCode: COURSE_CODE });
+      await request(app).post("/api/auth/register/start").send({ email: EMAIL, username: "student", courseCode: COURSE_CODE });
       const registerCode = lastCode();
       await request(app)
         .post("/api/auth/register/complete")
-        .send({ email: EMAIL, courseCode: COURSE_CODE, code: registerCode, password: PASSWORD });
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, code: registerCode, password: PASSWORD });
       const response = await request(app)
         .post("/api/auth/reset/complete")
         .send({ email: EMAIL, code: registerCode, password: "a brand new password" });

@@ -13,15 +13,18 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   unauthenticated: "Please log in.",
   rate_limited: "Too many attempts. Please wait a moment and try again.",
   invalid_setup_code: "The admin setup code is wrong or no longer valid.",
+  invalid_username: `A username needs 3 to 20 letters, digits, ".", "_" or "-".`,
+  username_taken: "This username is already taken.",
   forbidden: "Only admins can do this.",
   not_found: "This no longer exists. Reload the page.",
   course_exists: "A course with this name already exists.",
   cannot_change_own_role: "You cannot change your own role.",
+  course_not_empty: "This course still has members. Move or remove them first.",
   internal_error: "Something went wrong on our side. Please try again later.",
 };
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: object;
 }
 

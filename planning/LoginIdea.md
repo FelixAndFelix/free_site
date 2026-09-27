@@ -8,8 +8,8 @@ Die Identifikation erfolgt über eine bestätigte DHBW-E-Mail, die Autorisierung
 
 ### Registrierungs-Flow
 
-1. Nutzer gibt `E-Mail` und `Kurs-Code` (z.B. `WS24-123`) ein.
-2. Backend prüft die Domain der E-Mail gegen `ALLOWED_EMAIL_DOMAINS` (exakter Match) und ob der `Kurs-Code` existiert. Sonst Abbruch, es wird keine Mail gesendet.
+1. Nutzer gibt `E-Mail`, `Username` und `Kurs-Code` (z.B. `INF24B-7KQ2XMPA`) ein.
+2. Backend prüft die Domain der E-Mail gegen `ALLOWED_EMAIL_DOMAINS` (exakter Match), ob der `Username` den Regeln entspricht und frei ist und ob der `Kurs-Code` existiert. Sonst Abbruch, es wird keine Mail gesendet.
 3. Backend sendet einen 6-stelligen E-Mail-Code (10 Minuten gültig, einmalig, 5 Fehlversuche).
 4. Nutzer gibt den Code ein und setzt ein Passwort (mindestens 10 Zeichen, Argon2id).
 5. Backend legt `User` an, trägt ihn in `course_members` ein und startet eine Session.
@@ -45,6 +45,7 @@ Die Identifikation erfolgt über eine bestätigte DHBW-E-Mail, die Autorisierung
 
 - `id` (UUID, Primary Key)
 - `email` (String, Unique, lowercase)
+- `username` (String, eindeutig ohne Groß-/Kleinschreibung, 3–20 Zeichen; wird statt der E-Mail angezeigt)
 - `password_hash` (String)
 - `role` (`user` | `admin`)
 - `created_at` (Timestamp)

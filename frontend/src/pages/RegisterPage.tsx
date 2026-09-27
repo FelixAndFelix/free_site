@@ -4,6 +4,7 @@ import { PASSWORD_MIN_LENGTH, type UserResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Field } from "../Field";
+import { USERNAME_HINT } from "./UsernamePage";
 
 /** Two-step registration: email and course code, then emailed code and password. */
 export function RegisterPage() {
@@ -11,6 +12,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<"details" | "verify">("details");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [adminSetupCode, setAdminSetupCode] = useState("");
   const [code, setCode] = useState("");
@@ -20,7 +22,7 @@ export function RegisterPage() {
   /** Asks the backend to email a verification code. */
   async function requestCode(event?: FormEvent) {
     event?.preventDefault();
-    const result = await apiRequest("/api/auth/register/start", { body: { email, courseCode, adminSetupCode } });
+    const result = await apiRequest("/api/auth/register/start", { body: { email, username, courseCode, adminSetupCode } });
     if (!result.ok) return setError(errorMessage(result.error));
     setError("");
     setStep("verify");
@@ -30,7 +32,7 @@ export function RegisterPage() {
   async function complete(event: FormEvent) {
     event.preventDefault();
     const result = await apiRequest<UserResponse>("/api/auth/register/complete", {
-      body: { email, courseCode, code, password, adminSetupCode },
+      body: { email, username, courseCode, code, password, adminSetupCode },
     });
     if (!result.ok) return setError(errorMessage(result.error));
     setUser(result.data.user);
@@ -42,6 +44,8 @@ export function RegisterPage() {
       <form className="card" onSubmit={requestCode}>
         <h1>Create an account</h1>
         <Field label="DHBW email" type="email" autoComplete="email" value={email} onValue={setEmail} />
+        <Field label="Username" autoComplete="username" value={username} onValue={setUsername} />
+        <p className="muted">{USERNAME_HINT}</p>
         <Field label="Course code" placeholder="INF24B-7KQ2XMPA" value={courseCode} onValue={setCourseCode} />
         <details>
           <summary>I have an admin setup code</summary>
