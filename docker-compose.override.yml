@@ -1,5 +1,10 @@
 # Local development only. Production runs without this file (see docker-compose.prod.yml).
 services:
+  backend:
+    environment:
+      # Without RESEND_API_KEY, mails (and their codes) are printed to the backend log.
+      NODE_ENV: development
+
   frontend:
     ports:
       - "8080:80"

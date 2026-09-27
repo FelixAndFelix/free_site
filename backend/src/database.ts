@@ -1,14 +1,20 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { sql } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import * as schema from "./schema";
+
+// Resolves to backend/drizzle from both src/ (dev, tests) and dist/ (production build).
+const migrationsFolder = fileURLToPath(new URL("../drizzle", import.meta.url));
 
 /**
- * Creates the Postgres connection pool with a health check.
+ * Creates the Postgres connection pool with a health check and migrations.
  * @param {string} connectionString
  */
 export function createDatabase(connectionString: string) {
   const pool = new Pool({ connectionString, connectionTimeoutMillis: 2000 });
-  const db = drizzle(pool);
+  const db = drizzle(pool, { schema });
 
   /** Resolves true if Postgres answers a trivial query, never throws. */
   async function check(): Promise<boolean> {
@@ -20,5 +26,12 @@ export function createDatabase(connectionString: string) {
     }
   }
 
-  return { db, check, close: () => pool.end() };
+  /** Applies all pending SQL migrations from backend/drizzle. */
+  async function runMigrations(): Promise<void> {
+    await migrate(db, { migrationsFolder });
+  }
+
+  return { db, check, runMigrations, close: () => pool.end() };
 }
+
+export type Db = ReturnType<typeof createDatabase>["db"];
