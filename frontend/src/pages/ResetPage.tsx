@@ -15,7 +15,7 @@ export function ResetPage() {
   /** Asks the backend to email a reset code if the account exists. */
   async function requestCode(event: FormEvent) {
     event.preventDefault();
-    const result = await apiRequest("/api/auth/reset/start", { email });
+    const result = await apiRequest("/api/auth/reset/start", { body: { email } });
     if (!result.ok) return setError(errorMessage(result.error));
     setError("");
     setStep("verify");
@@ -24,7 +24,7 @@ export function ResetPage() {
   /** Sets the new password. */
   async function complete(event: FormEvent) {
     event.preventDefault();
-    const result = await apiRequest("/api/auth/reset/complete", { email, code, password });
+    const result = await apiRequest("/api/auth/reset/complete", { body: { email, code, password } });
     if (!result.ok) return setError(errorMessage(result.error));
     setStep("done");
   }

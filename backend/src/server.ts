@@ -1,3 +1,4 @@
+import { createAdminRouter } from "./admin/routes";
 import { createApp } from "./app";
 import { createAuthRouter } from "./auth/routes";
 import { loadConfig } from "./config";
@@ -21,8 +22,14 @@ const authRouter = createAuthRouter({
   allowedEmailDomains: config.allowedEmailDomains,
   secureCookies: config.isProduction,
   appUrl: config.appUrl,
+  adminSetupCode: config.adminSetupCode,
 });
 
-createApp({ checkDatabase: database.check, authRouter, trustProxy: config.trustProxy }).listen(config.port, () => {
+createApp({
+  checkDatabase: database.check,
+  authRouter,
+  adminRouter: createAdminRouter({ db: database.db }),
+  trustProxy: config.trustProxy,
+}).listen(config.port, () => {
   console.log(`backend listening on port ${config.port}`);
 });

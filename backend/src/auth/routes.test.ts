@@ -1,60 +1,45 @@
 import { sql } from "drizzle-orm";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../app";
 import { createDatabase } from "../database";
 import type { Mail } from "../mail";
-import { courses } from "../schema";
-import { createAuthRouter } from "./routes";
+import {
+  TEST_COURSE_CODE as COURSE_CODE,
+  TEST_PASSWORD as PASSWORD,
+  TEST_SETUP_CODE,
+  createTestApp,
+  lastCode as lastCodeOf,
+  registerUser,
+  resetDatabase,
+  sessionCookie,
+} from "../testHelpers";
 
-const PASSWORD = "correct horse battery";
 const EMAIL = "student@dhbw.example";
-const COURSE_CODE = "WS24-123";
 
 describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => {
   const database = createDatabase(process.env.DATABASE_URL ?? "");
   let sentMails: Mail[];
   let time: number;
-  let app: ReturnType<typeof createApp>;
+  let app: ReturnType<typeof createTestApp>;
 
   beforeAll(() => database.runMigrations());
   afterAll(() => database.close());
 
   beforeEach(async () => {
-    await database.db.execute(sql`truncate users, courses, email_codes, sessions cascade`);
-    await database.db.insert(courses).values({ name: "WWI 2024", joinCode: COURSE_CODE });
+    await resetDatabase(database.db);
     sentMails = [];
     time = Date.parse("2026-01-01T00:00:00Z");
-    const authRouter = createAuthRouter({
-      db: database.db,
-      sendMail: async (mail) => void sentMails.push(mail),
-      allowedEmailDomains: ["dhbw.example"],
-      secureCookies: false,
-      appUrl: "https://free.example",
-      now: () => new Date(time),
-    });
-    app = createApp({ checkDatabase: async () => true, authRouter, trustProxy: "loopback" });
+    app = createTestApp({ db: database.db, sentMails, now: () => new Date(time) });
   });
 
   /** Extracts the 6-digit code from the last mail sent. */
   function lastCode(): string {
-    return /\d{6}/.exec(sentMails.at(-1)?.text ?? "")![0];
+    return lastCodeOf(sentMails);
   }
 
-  /** Extracts the session cookie pair from a response. */
-  function sessionCookie(response: request.Response): string {
-    const cookies = response.headers["set-cookie"] as unknown as string[];
-    return cookies.find((cookie) => cookie.startsWith("session="))!.split(";")[0]!;
-  }
-
-  /** Registers the default user and returns its session cookie. */
-  async function register(email = EMAIL): Promise<string> {
-    await request(app).post("/api/auth/register/start").send({ email, courseCode: COURSE_CODE }).expect(202);
-    const response = await request(app)
-      .post("/api/auth/register/complete")
-      .send({ email, courseCode: COURSE_CODE, code: lastCode(), password: PASSWORD })
-      .expect(201);
-    return sessionCookie(response);
+  /** Registers a user (the default one unless an email is given) and returns its session cookie. */
+  function register(email = EMAIL, adminSetupCode?: string): Promise<string> {
+    return registerUser(app, sentMails, { email, adminSetupCode });
   }
 
   describe("registration", () => {
@@ -186,6 +171,82 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       const code = lastCode();
       for (let attempt = 0; attempt < 4; attempt++) await complete(wrongCode(code)).expect(400);
       await complete(code).expect(201);
+    });
+  });
+
+  describe("admin setup code", () => {
+    it("makes the first registration with the right code an admin", async () => {
+      const cookie = await register(EMAIL, TEST_SETUP_CODE);
+
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie).expect(200);
+      expect(me.body.user.role).toBe("admin");
+    });
+
+    it("rejects a wrong setup code before sending mail", async () => {
+      const response = await request(app)
+        .post("/api/auth/register/start")
+        .send({ email: EMAIL, courseCode: COURSE_CODE, adminSetupCode: "wrong" });
+
+      expect(response.body).toEqual({ error: "invalid_setup_code" });
+      expect(sentMails).toHaveLength(0);
+    });
+
+    it("stops working once an admin exists", async () => {
+      await register("first@dhbw.example", TEST_SETUP_CODE);
+      const response = await request(app)
+        .post("/api/auth/register/start")
+        .send({ email: EMAIL, courseCode: COURSE_CODE, adminSetupCode: TEST_SETUP_CODE });
+
+      expect(response.body).toEqual({ error: "invalid_setup_code" });
+    });
+
+    it("registers a normal user when the field is empty", async () => {
+      const cookie = await register(EMAIL, "");
+
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie).expect(200);
+      expect(me.body.user.role).toBe("user");
+    });
+  });
+
+  describe("claiming admin with the setup code", () => {
+    it("makes an existing user admin while no admin exists", async () => {
+      const cookie = await register();
+      const response = await request(app)
+        .post("/api/auth/claim-admin")
+        .set("Cookie", cookie)
+        .send({ adminSetupCode: TEST_SETUP_CODE })
+        .expect(200);
+
+      expect(response.body.user.role).toBe("admin");
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie);
+      expect(me.body.user.role).toBe("admin");
+    });
+
+    it("refuses once an admin exists", async () => {
+      await register("first@dhbw.example", TEST_SETUP_CODE);
+      const cookie = await register();
+      const response = await request(app)
+        .post("/api/auth/claim-admin")
+        .set("Cookie", cookie)
+        .send({ adminSetupCode: TEST_SETUP_CODE });
+
+      expect(response.body).toEqual({ error: "invalid_setup_code" });
+    });
+
+    it("requires a session", async () => {
+      await request(app).post("/api/auth/claim-admin").send({ adminSetupCode: TEST_SETUP_CODE }).expect(401);
+    });
+
+    it("limits attempts to 5 per IP per hour", async () => {
+      const cookie = await register();
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await request(app).post("/api/auth/claim-admin").set("Cookie", cookie).send({ adminSetupCode: "x" }).expect(400);
+      }
+      await request(app)
+        .post("/api/auth/claim-admin")
+        .set("Cookie", cookie)
+        .send({ adminSetupCode: TEST_SETUP_CODE })
+        .expect(429);
     });
   });
 

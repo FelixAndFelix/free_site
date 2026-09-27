@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { USER_ROLES } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
@@ -14,7 +14,7 @@ export const users = pgTable("users", {
 
 export const courses = pgTable("courses", {
   id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   joinCode: text("join_code").notNull().unique(),
 });
 
@@ -53,3 +53,17 @@ export const sessions = pgTable("sessions", {
     .references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+// "Modul" in the planning documents; lectures and modules are the same entity.
+export const modules = pgTable(
+  "modules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    semester: integer("semester").notNull(),
+  },
+  (table) => [index("modules_course_id_idx").on(table.courseId)],
+);

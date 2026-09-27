@@ -12,18 +12,28 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   invalid_credentials: "Email or password is wrong.",
   unauthenticated: "Please log in.",
   rate_limited: "Too many attempts. Please wait a moment and try again.",
+  invalid_setup_code: "The admin setup code is wrong or no longer valid.",
+  forbidden: "Only admins can do this.",
+  not_found: "This no longer exists. Reload the page.",
+  course_exists: "A course with this name already exists.",
+  cannot_change_own_role: "You cannot change your own role.",
   internal_error: "Something went wrong on our side. Please try again later.",
 };
+
+interface RequestOptions {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: object;
+}
 
 /**
  * Sends a JSON request to the backend and never throws: network errors become internal_error.
  * @param {string} path
- * @param {object} [body] sent as a POST when given, otherwise the request is a GET
+ * @param {RequestOptions} [options] the method defaults to POST with a body, GET without
  */
-export async function apiRequest<T>(path: string, body?: object): Promise<ApiResult<T>> {
+export async function apiRequest<T>(path: string, { method, body }: RequestOptions = {}): Promise<ApiResult<T>> {
   try {
     const response = await fetch(path, {
-      method: body ? "POST" : "GET",
+      method: method ?? (body ? "POST" : "GET"),
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });

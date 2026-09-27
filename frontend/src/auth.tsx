@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Ends the session on the server and forgets the user locally. */
   async function logout() {
-    await apiRequest("/api/auth/logout", {});
+    await apiRequest("/api/auth/logout", { body: {} });
     setUser(null);
   }
 
