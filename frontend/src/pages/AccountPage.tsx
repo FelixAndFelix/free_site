@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { apiRequest, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Field } from "../Field";
+import { BackLink } from "../BackLink";
 
 /** The user's account: who they are, a link to change the username, and deleting the account. */
 export function AccountPage() {
@@ -26,7 +27,7 @@ export function AccountPage() {
 
   return (
     <div className="stack">
-      <Link to="/">← All modules</Link>
+      <BackLink to="/">All modules</BackLink>
       <h1>Account</h1>
       <section className="card">
         <h2>Your details</h2>

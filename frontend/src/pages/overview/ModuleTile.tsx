@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { CaretRight } from "@phosphor-icons/react";
 import type { ModuleOverview } from "@free-site/shared";
 import { VoteBar } from "./VoteBar";
 import { VoteButtons } from "./VoteButtons";
@@ -18,6 +19,7 @@ export function ModuleTile({ module, onChange }: ModuleTileProps) {
       <h3>
         <Link to={`/modules/${module.id}`} className="module-link">
           {module.name}
+          <CaretRight className="module-link-icon" aria-hidden="true" />
         </Link>
       </h3>
       <VoteBar counts={module.counts} />

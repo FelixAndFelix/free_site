@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, LockSimple } from "@phosphor-icons/react";
 import {
   VOTE_COOLDOWN_MINUTES,
   VOTE_VALUES,
@@ -87,21 +88,23 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
               disabled={saving || lockedUntil !== null}
               onClick={() => castVote(value)}
             >
-              <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
-              {VOTE_META[value].label}
-              {selected && (
-                <span className="check" aria-hidden="true">
-                  {" "}
-                  ✓
-                </span>
+              {selected ? (
+                <Check className="check" weight="bold" aria-hidden="true" />
+              ) : (
+                <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
               )}
+              {VOTE_META[value].label}
             </button>
           );
         })}
       </div>
       {lockedUntil && (
-        <p className="muted vote-cooldown">
-          You can change your vote again at {clockTime.format(lockedUntil)} (once every {VOTE_COOLDOWN_MINUTES} minutes).
+        <p className="vote-cooldown">
+          <LockSimple aria-hidden="true" />
+          <span>
+            You can change your vote again at {clockTime.format(lockedUntil)} (once every {VOTE_COOLDOWN_MINUTES}{" "}
+            minutes).
+          </span>
         </p>
       )}
       {error && <p role="alert">{error}</p>}
