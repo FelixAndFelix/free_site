@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 import type { CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../api";
-import { useAuth } from "../auth";
 import { useCourseEvents } from "../useCourseEvents";
 import { ModuleTile } from "./overview/ModuleTile";
 
 /** Overview of the user's course: every module grouped by semester, with vote shares and vote buttons. */
 export function HomePage() {
-  const { user, logout } = useAuth();
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState("");
 
@@ -49,40 +46,52 @@ export function HomePage() {
   const semesters = [...new Set(overview?.modules.map((module) => module.semester))];
 
   return (
-    <div className="stack">
-      <header className="page-header">
-        <h1>{overview?.course?.name ?? "free_site"}</h1>
-        <button type="button" className="link-button" onClick={logout}>
-          Log out
-        </button>
+    <div className="stack-lg">
+      <header className="page-intro">
+        <h1>{overview?.course?.name ?? "Your course"}</h1>
+        <p className="muted">Which exams are free? Vote on each module; everyone sees the totals.</p>
       </header>
-      <p>
-        Logged in as <strong>{user?.username}</strong> · <Link to="/account">Account</Link>
-        {user?.role === "admin" && (
-          <>
-            {" "}
-            · <Link to="/admin">Admin</Link>
-          </>
-        )}
-      </p>
       {error && <p role="alert">{error}</p>}
+      {!overview && !error && <OverviewSkeleton />}
       {overview && !overview.course && (
-        <p className="card">You are not in a course. Ask an admin to add you to one.</p>
+        <p className="empty-state">You are not in a course yet. Ask an admin to add you to one.</p>
       )}
       {overview?.course && overview.modules.length === 0 && (
-        <p className="card">There are no modules in this course yet.</p>
+        <p className="empty-state">There are no modules in this course yet. An admin adds them.</p>
       )}
-      {semesters.map((semester) => (
-        <section key={semester} className="stack">
-          <h2>Semester {semester}</h2>
-          <div className="module-grid">
-            {overview!.modules
-              .filter((module) => module.semester === semester)
-              .map((module) => (
+      {semesters.map((semester) => {
+        const inSemester = overview!.modules.filter((module) => module.semester === semester);
+        return (
+          <section key={semester} className="semester" aria-labelledby={`semester-${semester}`}>
+            <div className="semester-head">
+              <h2 id={`semester-${semester}`}>Semester {semester}</h2>
+              <span className="semester-count">
+                {inSemester.length === 1 ? "1 module" : `${inSemester.length} modules`}
+              </span>
+            </div>
+            <div className="module-grid">
+              {inSemester.map((module) => (
                 <ModuleTile key={module.id} module={module} onChange={updateModule} />
               ))}
-          </div>
-        </section>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Grey placeholders in the shape of module tiles while the overview loads. */
+function OverviewSkeleton() {
+  return (
+    <div className="module-grid" role="status" aria-label="Loading modules">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="card module-tile skeleton" aria-hidden="true">
+          <span className="skeleton-line skeleton-title" />
+          <span className="skeleton-line" />
+          <span className="skeleton-line skeleton-bar" />
+          <span className="skeleton-line skeleton-buttons" />
+        </div>
       ))}
     </div>
   );

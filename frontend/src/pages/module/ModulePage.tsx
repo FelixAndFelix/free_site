@@ -6,6 +6,7 @@ import { useCourseEvents } from "../../useCourseEvents";
 import { VoteBar } from "../overview/VoteBar";
 import { VoteButtons } from "../overview/VoteButtons";
 import { HistoryChart } from "./HistoryChart";
+import { BackLink } from "../../BackLink";
 
 /** Detail view of one module: current shares, the user's vote and the vote history over time. */
 export function ModulePage() {
@@ -36,31 +37,38 @@ export function ModulePage() {
       </div>
     );
   }
-  if (!detail) return <p>Loading...</p>;
+  if (!detail) return <p className="muted" role="status">Loading…</p>;
   const { module, history } = detail;
 
   return (
-    <div className="stack">
-      <Link to="/">← All modules</Link>
-      <header>
+    <div className="stack-lg">
+      <header className="page-intro">
+        <BackLink to="/">All modules</BackLink>
         <h1>{module.name}</h1>
         <p className="muted">Semester {module.semester}</p>
       </header>
-      <section className="card">
-        <h2>Right now</h2>
-        <VoteBar counts={module.counts} />
-        {/* A vote changes today's point in the history, so the whole detail is reloaded. */}
-        <VoteButtons module={module} onChange={loadDetail} />
+      <section className="card verdict-panel" aria-labelledby="right-now">
+        <h2 id="right-now" className="visually-hidden">
+          Right now
+        </h2>
+        <VoteBar counts={module.counts} size="large" />
+        <div className="your-vote">
+          <h3>Your vote</h3>
+          {/* A vote changes today's point in the history, so the whole detail is reloaded. */}
+          <VoteButtons module={module} onChange={loadDetail} />
+        </div>
       </section>
-      <section className="card">
-        <h2>Over time</h2>
+      <section className="card" aria-labelledby="over-time">
+        <div className="card-head">
+          <h2 id="over-time">Over time</h2>
+          {history.length > 0 && (
+            <p className="muted">How many classmates held each opinion at the end of each day.</p>
+          )}
+        </div>
         {history.length === 0 ? (
           <p className="muted">No votes yet. The history starts with the first vote.</p>
         ) : (
-          <>
-            <p className="muted">How many classmates held each opinion at the end of each day.</p>
-            <HistoryChart history={history} />
-          </>
+          <HistoryChart history={history} />
         )}
       </section>
     </div>

@@ -58,11 +58,11 @@ export function type(label: RegExp, value: string) {
 }
 
 /**
- * Waits for the home screen line "Logged in as <username>", which spans several elements.
+ * Waits for the account link with the username in the app bar, which appears once a user is logged in.
  * @param {string} username
  */
 export function findLoggedInAs(username: string) {
-  return screen.findByText((_, element) => element?.tagName === "P" && element.textContent?.startsWith(`Logged in as ${username}`) === true);
+  return screen.findByRole("link", { name: `${username} (account)` });
 }
 
 /** Stand-in for the browser's EventSource that tests can push server-sent events through. */

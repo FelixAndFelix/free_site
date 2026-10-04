@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { VOTE_COOLDOWN_MINUTES } from "@free-site/shared";
+import { BackLink } from "../BackLink";
 
 const CONTACT = "mail@felixkarg.de";
 const LAST_UPDATED = "27 September 2026";
@@ -25,7 +26,7 @@ const STORED_DATA = [
 export function PrivacyPage() {
   return (
     <article className="stack prose">
-      <Link to="/">← Back</Link>
+      <BackLink to="/">Back</BackLink>
       <h1>Privacy</h1>
       <p className="muted">Last updated: {LAST_UPDATED}</p>
 

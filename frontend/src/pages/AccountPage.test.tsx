@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockApi, renderAt, sentBodies, type } from "../testUtils";
 
@@ -23,7 +23,7 @@ describe("AccountPage", () => {
     renderAt("/account");
 
     expect(await screen.findByRole("heading", { name: "Account" })).toBeInTheDocument();
-    expect(screen.getByText("student")).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getByText("student")).toBeInTheDocument();
     expect(screen.getByText(/student@dhbw.example/)).toBeInTheDocument();
   });
 

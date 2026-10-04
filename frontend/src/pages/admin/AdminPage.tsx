@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 import type { AdminCourse, CoursesResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../../api";
 import { CoursesSection } from "./CoursesSection";
 import { ModulesSection } from "./ModulesSection";
 import { UsersSection } from "./UsersSection";
+import { BackLink } from "../../BackLink";
 
 /** Admin screen: courses with join codes, the modules of one course, and user roles. */
 export function AdminPage() {
@@ -28,8 +28,8 @@ export function AdminPage() {
   return (
     <div className="stack">
       <header className="page-header">
+        <BackLink to="/">All modules</BackLink>
         <h1>Admin</h1>
-        <Link to="/">Back</Link>
       </header>
       {error && <p role="alert">{error}</p>}
       <CoursesSection
