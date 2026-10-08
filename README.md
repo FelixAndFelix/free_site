@@ -4,6 +4,14 @@ Webapp for students to call out which exams are free this semester.
 
 Live at [free.felixkarg.de](https://free.felixkarg.de).
 
+## Features
+
+- Vote per module whether its exam is free, possible or impossible, with live results for the course
+- Join a course by code or invite link (`/join/<code>`); one course per account
+- English and German, chosen per account; installable as a PWA
+- Admins manage courses, modules and users and read the activity and access logs
+- Daily database backups with a verified restore
+
 ## Planning
 
 - [`planning/Decisions.md`](planning/Decisions.md) — architecture and process decisions (source of truth)
