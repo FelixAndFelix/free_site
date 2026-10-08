@@ -5,8 +5,8 @@ import { findLoggedInAs, mockApi, renderAt, sentBodies, type } from "../../testU
 const ADMIN = { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin" };
 const COURSE = { id: "c1", name: "INF24B", joinCode: "INF24B-7KQ2XMPA", memberCount: 12, moduleCount: 2 };
 const MODULES = [
-  { id: "m1", courseId: "c1", name: "Mathematik I", semester: 1 },
-  { id: "m2", courseId: "c1", name: "Datenbanken", semester: 3 },
+  { id: "m1", courseId: "c1", name: "Mathematik I", semester: 1, votingEndsAt: null },
+  { id: "m2", courseId: "c1", name: "Datenbanken", semester: 3, votingEndsAt: null },
 ];
 const USERS = [
   { id: "a1", email: "admin@dhbw.example", username: "felix", role: "admin", courseId: "c1", courseName: "INF24B" },
@@ -175,8 +175,50 @@ describe("AdminPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await vi.waitFor(() =>
-      expect(sentBodies(fetchMock, "PATCH", "/api/admin/modules/m2")).toEqual([{ name: "Datenbanksysteme", semester: 4 }]),
+      expect(sentBodies(fetchMock, "PATCH", "/api/admin/modules/m2")).toEqual([{ name: "Datenbanksysteme", semester: 4, votingEndsAt: null }]),
     );
+  });
+
+  it("sets a voting deadline on a module", async () => {
+    const fetchMock = mockAdminApi({ "PATCH /api/admin/modules/m2": { status: 200, body: { module: MODULES[1] } } });
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Manage modules" }));
+    const row = (await screen.findByText("Datenbanken")).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText(/^Voting ends/), { target: { value: "2027-02-01T12:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() =>
+      expect(sentBodies(fetchMock, "PATCH", "/api/admin/modules/m2")).toEqual([
+        { name: "Datenbanken", semester: 3, votingEndsAt: new Date("2027-02-01T12:00").toISOString() },
+      ]),
+    );
+  });
+
+  it("ends voting for a whole semester after confirmation", async () => {
+    const fetchMock = mockAdminApi({
+      "POST /api/admin/courses/c1/close-semester": { status: 200, body: { closed: 1 } },
+    });
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Manage modules" }));
+    fireEvent.click(await screen.findByRole("button", { name: "End voting for semester 3" }));
+
+    expect(await screen.findByText("Voting ended for 1 modules.")).toBeInTheDocument();
+    expect(sentBodies(fetchMock, "POST", "/api/admin/courses/c1/close-semester")).toEqual([{ semester: 3 }]);
+  });
+
+  it("does not offer to end voting on a semester that is already closed", async () => {
+    const closed = { ...MODULES[1], votingEndsAt: "2020-01-01T00:00:00.000Z" };
+    mockAdminApi({ "GET /api/admin/courses/c1/modules": { status: 200, body: { modules: [MODULES[0], closed] } } });
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Manage modules" }));
+
+    expect(await screen.findByText(/Voting ended/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "End voting for semester 3" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "End voting for semester 1" })).toBeInTheDocument();
   });
 
   it("cancels editing a module without saving", async () => {

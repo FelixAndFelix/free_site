@@ -1,0 +1,1 @@
+ALTER TABLE "modules" ADD COLUMN "voting_ends_at" timestamp with time zone;

@@ -11,8 +11,10 @@ const MATHE = {
   counts: { free: 3, possible: 1, impossible: 0 },
   myVote: null,
   canChangeAt: null,
+  votingEndsAt: null,
+  votingClosed: false,
 };
-const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free", canChangeAt: null };
+const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free", canChangeAt: null, votingEndsAt: null, votingClosed: false };
 const IN_TEN_MINUTES = () => new Date(Date.now() + 10 * 60_000).toISOString();
 
 /**
@@ -103,6 +105,24 @@ describe("HomePage overview", () => {
     renderAt("/");
 
     expect(await screen.findByRole("link", { name: "Mathematik I" })).toHaveAttribute("href", "/modules/m1");
+  });
+
+  it("freezes a module whose voting has ended and says since when", async () => {
+    mockOverview([{ ...DB, votingEndsAt: "2026-02-01T10:00:00.000Z", votingClosed: true }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    for (const button of within(tile).getAllByRole("button")) expect(button).toBeDisabled();
+    expect(within(tile).getByText(/Voting ended on .*2026.*The result is final\./)).toBeInTheDocument();
+  });
+
+  it("announces the deadline while voting is still open", async () => {
+    mockOverview([{ ...DB, votingEndsAt: "2099-02-01T10:00:00.000Z", votingClosed: false }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    expect(within(tile).getByText(/Voting ends on .*2099/)).toBeInTheDocument();
+    for (const button of within(tile).getAllByRole("button")) expect(button).toBeEnabled();
   });
 
   it("locks the buttons during the cooldown and says until when", async () => {

@@ -126,6 +126,7 @@ export type ApiErrorCode =
   | "cannot_change_own_role"
   | "course_not_empty"
   | "vote_cooldown"
+  | "voting_closed"
   | "last_admin"
   | "already_in_course"
   | "internal_error";
@@ -155,6 +156,8 @@ export interface Module {
   courseId: string;
   name: string;
   semester: number;
+  /** ISO time at which voting ends, or null while voting stays open. */
+  votingEndsAt: string | null;
 }
 
 /** A user as listed for admins. */
@@ -182,6 +185,18 @@ export interface CreateModuleRequest {
 export interface UpdateModuleRequest {
   name?: string;
   semester?: number;
+  /** ISO time at which voting ends; null reopens voting. */
+  votingEndsAt?: string | null;
+}
+
+/** Body of POST /api/admin/courses/:courseId/close-semester: ends voting now on a semester's open modules. */
+export interface CloseSemesterRequest {
+  semester: number;
+}
+
+/** Response body of POST /api/admin/courses/:courseId/close-semester. */
+export interface CloseSemesterResponse {
+  closed: number;
 }
 
 /** Body of PATCH /api/admin/courses/:courseId. */
@@ -237,6 +252,10 @@ export interface ModuleOverview {
   id: string;
   name: string;
   semester: number;
+  /** ISO time at which voting ends, or null while voting stays open. */
+  votingEndsAt: string | null;
+  /** True once the deadline has passed: the verdict is frozen and nobody can vote. */
+  votingClosed: boolean;
   counts: VoteCounts;
   myVote: VoteValue | null;
   /** ISO time from which the user may change their vote again; null if they may change it now. */

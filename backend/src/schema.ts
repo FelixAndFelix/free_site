@@ -74,6 +74,8 @@ export const modules = pgTable(
       .references(() => courses.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     semester: integer("semester").notNull(),
+    // From this time on the verdict is frozen: votes can no longer be set, changed or withdrawn.
+    votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }),
   },
   (table) => [index("modules_course_id_idx").on(table.courseId)],
 );
