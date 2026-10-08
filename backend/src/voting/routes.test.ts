@@ -278,4 +278,83 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
         .expect(403);
     });
   });
+  describe("grades", () => {
+    /** Ends voting on a module as admin. */
+    async function closeVoting(moduleId: string) {
+      await request(app)
+        .patch(`/api/admin/modules/${moduleId}`)
+        .set("Cookie", adminCookie)
+        .send({ votingEndsAt: "2026-10-01T09:00:00Z" })
+        .expect(200);
+    }
+
+    /** Registers a student, ending up with the cookie. */
+    function newStudent(index: number) {
+      return registerUser(app, sentMails, { email: `grader${index}@dhbw.example` });
+    }
+
+    it("refuses a grade while voting is open", async () => {
+      const moduleId = await createModule("Analysis", 1);
+
+      const response = await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 2.0 });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe("voting_open");
+    });
+
+    it("stores, changes and deletes the user's own grade", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await closeVoting(moduleId);
+
+      const set = await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 1.7 }).expect(200);
+      expect(set.body.module.myGrade).toBe(1.7);
+      const changed = await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 2.3 }).expect(200);
+      expect(changed.body.module.myGrade).toBe(2.3);
+      const removed = await request(app).delete(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).expect(200);
+      expect(removed.body.module.myGrade).toBeNull();
+    });
+
+    it("rejects grades outside 1.0 to 5.0 or with more than one decimal", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await closeVoting(moduleId);
+
+      for (const grade of [0.9, 5.1, 1.55, "2", null, Number.NaN]) {
+        await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade }).expect(400);
+      }
+      await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 1 }).expect(200);
+      await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 5 }).expect(200);
+    });
+
+    it("shows others only the average and spread, and only from five grades on", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await closeVoting(moduleId);
+      const values = [1.0, 2.0, 3.0, 4.0, 2.3];
+      // The admin and the student are in the course too; three more make five. Registrations run one by one because of the send-code limit per IP.
+      const cookies = [studentCookie, adminCookie];
+      for (const index of [1, 2, 3]) cookies.push(await newStudent(index));
+
+      for (const [index, cookie] of cookies.slice(0, 4).entries()) {
+        await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", cookie).send({ grade: values[index] }).expect(200);
+      }
+      const early = await request(app).get("/api/overview").set("Cookie", cookies[4]!).expect(200);
+      expect(early.body.modules[0].gradeStats).toBeNull();
+      expect(JSON.stringify(early.body)).not.toContain("grader");
+
+      await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", cookies[4]!).send({ grade: values[4] }).expect(200);
+      const full = await request(app).get("/api/overview").set("Cookie", cookies[0]!).expect(200);
+      expect(full.body.modules[0].gradeStats).toEqual({ count: 5, average: 2.5, best: 1, worst: 4 });
+      // Everyone only sees their own grade, never another one.
+      expect(full.body.modules[0].myGrade).toBe(1);
+    });
+
+    it("deletes the grades together with the account", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await closeVoting(moduleId);
+      await request(app).put(`/api/modules/${moduleId}/grade`).set("Cookie", studentCookie).send({ grade: 2.0 }).expect(200);
+
+      await request(app).delete("/api/auth/account").set("Cookie", studentCookie).send({ password: "correct horse battery" }).expect(204);
+
+      expect(await database.db.query.grades.findMany()).toHaveLength(0);
+    });
+  });
 });

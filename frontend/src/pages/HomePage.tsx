@@ -46,7 +46,9 @@ export function HomePage() {
     );
   }
 
-  const semesters = [...new Set(overview?.modules.map((module) => module.semester))];
+  const openModules = overview?.modules.filter((module) => !module.votingClosed) ?? [];
+  const pastModules = overview?.modules.filter((module) => module.votingClosed) ?? [];
+  const semesters = [...new Set(openModules.map((module) => module.semester))];
 
   return (
     <div className="stack-lg">
@@ -63,7 +65,7 @@ export function HomePage() {
         <p className="empty-state">{t("home.noModules")}</p>
       )}
       {semesters.map((semester) => {
-        const inSemester = overview!.modules.filter((module) => module.semester === semester);
+        const inSemester = openModules.filter((module) => module.semester === semester);
         return (
           <section key={semester} className="semester" aria-labelledby={`semester-${semester}`}>
             <div className="semester-head">
@@ -78,6 +80,20 @@ export function HomePage() {
           </section>
         );
       })}
+      {pastModules.length > 0 && (
+        <details className="past-modules">
+          <summary>
+            <h2>{t("home.past")}</h2>
+            <span className="semester-count">{t("home.moduleCount", { count: pastModules.length })}</span>
+          </summary>
+          <p className="muted">{t("home.pastHint")}</p>
+          <div className="module-grid">
+            {pastModules.map((module) => (
+              <ModuleTile key={module.id} module={module} onChange={updateModule} />
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

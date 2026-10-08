@@ -235,3 +235,10 @@ focused elements never hide underneath it.
 2. Build the phone layout, then add `min-width` media queries.
 3. Screenshot light and dark, phone and desktop, before opening a pull request.
 4. Update this file in the same pull request when a rule or token changes.
+
+### Grades and past modules
+
+Modules whose voting has ended leave the semester sections and sit in a collapsed "Past modules"
+`<details>` below them. Their tile keeps the frozen vote bar and gets a grade box (`.grade-box`) under
+the vote buttons: a number field (1.0 to 5.0), "Save grade" and "Remove grade" as secondary buttons and
+one muted line with average, best and worst once enough grades are in, otherwise how many are needed.

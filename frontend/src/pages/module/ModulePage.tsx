@@ -5,6 +5,7 @@ import { apiRequest } from "../../api";
 import { errorKey, useI18n } from "../../i18n";
 import { useCourseEvents } from "../../useCourseEvents";
 import { VoteBar } from "../overview/VoteBar";
+import { GradeBox } from "../overview/GradeBox";
 import { VoteButtons } from "../overview/VoteButtons";
 import { HistoryChart } from "./HistoryChart";
 import { BackLink } from "../../BackLink";
@@ -59,6 +60,7 @@ export function ModulePage() {
           {/* A vote changes today's point in the history, so the whole detail is reloaded. */}
           <VoteButtons module={module} onChange={loadDetail} />
         </div>
+        {module.votingClosed && <GradeBox module={module} onChange={loadDetail} />}
       </section>
       <section className="card" aria-labelledby="over-time">
         <div className="card-head">

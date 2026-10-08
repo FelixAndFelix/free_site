@@ -127,6 +127,7 @@ export type ApiErrorCode =
   | "course_not_empty"
   | "vote_cooldown"
   | "voting_closed"
+  | "voting_open"
   | "last_admin"
   | "already_in_course"
   | "internal_error";
@@ -256,10 +257,33 @@ export interface ModuleOverview {
   votingEndsAt: string | null;
   /** True once the deadline has passed: the verdict is frozen and nobody can vote. */
   votingClosed: boolean;
+  /** The user's own grade for this module (1.0 to 5.0), or null. */
+  myGrade: number | null;
+  /** Average, best and worst grade of the course; null until enough grades are in. */
+  gradeStats: GradeStats | null;
   counts: VoteCounts;
   myVote: VoteValue | null;
   /** ISO time from which the user may change their vote again; null if they may change it now. */
   canChangeAt: string | null;
+}
+
+/** Best German grade is 1.0, worst passing 4.0, failed 5.0. */
+export const GRADE_MIN = 1;
+export const GRADE_MAX = 5;
+/** Grades of a module are shown to others only from this many grades on, so none can be traced to a person. */
+export const MIN_GRADES_SHOWN = 5;
+
+/** Summary of a module's grades, shown only once at least MIN_GRADES_SHOWN were entered. */
+export interface GradeStats {
+  count: number;
+  average: number;
+  best: number;
+  worst: number;
+}
+
+/** Body of PUT /api/modules/:moduleId/grade; a grade from 1.0 to 5.0 in steps of 0.1. */
+export interface GradeRequest {
+  grade: number;
 }
 
 /** Response body of GET /api/overview; course is null for users who are in no course. */

@@ -43,6 +43,7 @@ describe("PrivacyPage", () => {
       "Language",
       "Language choice in your browser",
       "Your votes",
+      "Your grades",
       "Vote history",
       "Session cookie",
       "Email codes",

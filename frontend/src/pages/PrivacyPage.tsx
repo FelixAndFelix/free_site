@@ -23,6 +23,11 @@ const STORED_DATA = [
   ],
   ["Your votes", "The totals and charts of your course", "Until you delete your account or the module is deleted"],
   [
+    "Your grades",
+    "Grades you enter yourself after voting on a module has ended. Others see only the average, best and worst grade of the course, and only once at least 5 grades were entered",
+    "Until you remove the grade, delete your account or the module is deleted",
+  ],
+  [
     "Vote history",
     "The charts over time. Stored without any link to you: module, old vote, new vote and time only",
     "Kept, also after your account is deleted, because it cannot be linked to you",
@@ -71,7 +76,7 @@ export function PrivacyPage() {
       <section className="card">
         <h2>The short version</h2>
         <ul>
-          <li>Other users only ever see totals, never who voted what.</li>
+          <li>Other users only ever see totals, never who voted what, and grades only as an average over at least 5 grades.</li>
           <li>
             <strong>The operator can link your votes to your email address</strong>, because both are stored in the
             same database. They do not look at individual votes and never share them.
@@ -141,7 +146,7 @@ export function PrivacyPage() {
           Under the GDPR you have the right to access your data, to have it corrected or deleted, to restrict or object
           to its processing and to receive it in a portable format. Write to{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. You can delete your account yourself under{" "}
-          <Link to="/account">Account</Link>; this removes your email, username, password and votes. Entries about
+          <Link to="/account">Account</Link>; this removes your email, username, password, votes and grades. Entries about
           you in the activity log and the access log expire on their own after the times in the table above.
         </p>
         <p>You also have the right to lodge a complaint with a data protection supervisory authority.</p>
