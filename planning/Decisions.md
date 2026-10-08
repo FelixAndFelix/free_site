@@ -52,7 +52,10 @@ Single source of truth for architecture and process decisions. If another planni
 3. ✅ Admin bootstrap (`ADMIN_SETUP_CODE`, `/claim-admin`); create courses, join codes and modules on `/admin`.
 4. ✅ Voting (upsert) and overview with bar chart: the home screen lists the modules of the user's course by semester, each with a stacked bar of the vote shares and three vote buttons.
 5. ✅ Detail view (`/modules/:id`: current shares, vote buttons, history graph over time) and privacy info screen (`/privacy`, public, in English), plus self-service account deletion and `/.well-known/security.txt`.
-6. Optional passkeys and "My devices".
+6. ✅ Invite links (`/join/<code>`), admin redesign with the optional module management, header with logo, favicon and PWA, English and German per account.
+7. ✅ Database backups with a tested restore, end-to-end tests in CI, activity and access logs with search and filters.
+8. Semester rollover: voting deadline per module, then optional grades with an average once enough are in.
+9. Optional passkeys and "My devices".
 
 ## Post-MVP
 
