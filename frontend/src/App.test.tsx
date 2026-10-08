@@ -19,6 +19,38 @@ describe("App", () => {
     expect(await findLoggedInAs("student")).toBeInTheDocument();
   });
 
+  describe("header", () => {
+    it("shows the logo, the way home and the user's links", async () => {
+      mockApi({ "GET /api/auth/me": { status: 200, body: { user: { ...USER, role: "admin" } } } });
+      renderAt("/");
+      await findLoggedInAs("student");
+
+      expect(screen.getByRole("link", { name: "free_site" })).toHaveAttribute("href", "/");
+      expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+      expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+    });
+
+    it("marks the current page and hides the admin link from users", async () => {
+      mockApi({ "GET /api/auth/me": { status: 200, body: { user: USER } } });
+      renderAt("/account");
+      await findLoggedInAs("student");
+
+      expect(screen.getByRole("link", { name: "student (account)" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+      expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
+    });
+
+    it("shows only the logo to a logged-out visitor", async () => {
+      mockApi({});
+      renderAt("/login");
+      await screen.findByRole("heading", { name: "Log in" });
+
+      expect(screen.getByRole("link", { name: "free_site" })).toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
+    });
+  });
+
   it("logs in and opens the home screen", async () => {
     const fetchMock = mockApi({ "POST /api/auth/login": { status: 200, body: { user: USER } } });
     renderAt("/login");

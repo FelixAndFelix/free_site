@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router";
-import { ShieldCheck, SignOut, UserCircle } from "@phosphor-icons/react";
+import { ChartBar, ShieldCheck, SignOut, UserCircle } from "@phosphor-icons/react";
+import { LogoMark } from "./LogoMark";
 import { useAuth } from "./auth";
 import { AccountDeletedPage } from "./pages/AccountDeletedPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -52,11 +53,16 @@ function AppBar() {
   return (
     <header className="app-bar">
       <div className="app-bar-inner">
-        <Link to="/" className="wordmark" translate="no">
-          free_site
+        <Link to="/" className="brand" translate="no">
+          <LogoMark className="brand-mark" />
+          <span className="wordmark">free_site</span>
         </Link>
         {user && (
           <nav className="app-nav" aria-label="Main">
+            <NavLink to="/" end className="nav-item">
+              <ChartBar aria-hidden="true" />
+              <span className="nav-label">Overview</span>
+            </NavLink>
             {user.role === "admin" && (
               <NavLink to="/admin" className="nav-item">
                 <ShieldCheck aria-hidden="true" />

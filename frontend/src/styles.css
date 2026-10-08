@@ -271,11 +271,24 @@ main:focus {
   padding: 0 max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-control);
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+}
+
 .wordmark {
   font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.03em;
-  text-decoration: none;
 }
 
 .app-nav {
@@ -320,8 +333,12 @@ main:focus {
   white-space: nowrap;
 }
 
-/* Phones: Admin and Log out show only their icon; the label stays for screen readers. */
+/* Phones: Overview, Admin and Log out show only their icon; the label stays for screen readers. */
 @media (max-width: 479px) {
+  .nav-name {
+    max-width: 5.5rem;
+  }
+
   .nav-label {
     position: absolute;
     width: 1px;

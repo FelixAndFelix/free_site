@@ -75,9 +75,10 @@ Sentence case everywhere, including buttons and headings. No all-caps labels, no
 
 - **Container:** 44rem wide, 60rem from 1024px; side gutter 1rem on phones, 2rem from 768px.
 - **Rhythm:** 2rem between page sections (`.stack-lg`), 1rem inside panels, 0.875rem between tiles.
-- **App bar:** sticky, 3.5rem high, wordmark left, navigation right. On phones under 480px the
-  Admin and Log out labels collapse to icons (the label stays for screen readers); the account
-  item always shows the username.
+- **App bar:** sticky, 3.5rem high, logo mark and wordmark left (a link home), navigation right:
+  Overview, Admin (admins only), the username (links to Account) and Log out. The current page is
+  highlighted. On phones under 480px the Overview, Admin and Log out labels collapse to icons (the
+  label stays for screen readers); the account item always shows the username.
 - **Overview:** one column of module tiles, two from 1024px, grouped under "Semester N" with the
   module count on the right.
 - **Module page:** title block, then a verdict panel (verdict and share left, bar and legend right
@@ -156,6 +157,20 @@ Inline SVG line chart, one 2px line per vote value, recessive grid in `--line`, 
   pages show "Loading…".
 - **Empty:** dashed panel with a sentence that says what happens next.
 - **Errors:** inline, next to what failed, with the next step.
+
+## Logo and app icons
+
+The mark is three rounded bars of descending height in the vote colors: free, possible, impossible
+(a miniature of a module's vote bar). In the app it is `LogoMark` and takes its colors from the
+theme tokens. The favicon and app icons are rendered from the same geometry by
+`frontend/scripts/build-icons.mjs` (see the comments there for how to run it); change the shapes in
+both places together.
+
+- Favicon: transparent bars (`favicon.svg`).
+- Install icons: the bars on `#eef0f3`; the maskable icon is full-bleed with the bars inside the
+  safe zone; the Apple touch icon is full-bleed.
+- Non-production instances use the same bars on blue (`#1e3a8a`), which also colors the browser
+  chrome of the installed app, so dev and production never look alike.
 
 ## Icons
 
