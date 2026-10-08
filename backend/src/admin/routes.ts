@@ -1,12 +1,20 @@
-import { Router, type Response } from "express";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { Router, type Request, type Response } from "express";
+import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import {
+  AUDIT_ACTIONS,
+  AUDIT_CATEGORIES,
+  AUDIT_RANGES,
+  AUDIT_SEARCH_MAX_LENGTH,
   MAX_SEMESTER,
   NAME_MAX_LENGTH,
   USER_ROLES,
   type AdminCourse,
   type AdminUserEntry,
+  type AuditAction,
+  type AuditCategory,
+  type AuditRange,
   type AuthUser,
+  type CloseSemesterResponse,
   type CourseResponse,
   type CoursesResponse,
   type Module,
@@ -16,6 +24,7 @@ import {
   type UserRole,
   type UsersResponse,
 } from "@free-site/shared";
+import type { AuditLog } from "../audit/log";
 import { requireRole } from "../auth/middleware";
 import { generateJoinCode } from "../courses";
 import { isUniqueViolation, type Db } from "../database";
@@ -27,6 +36,7 @@ import { withdrawVotesOutsideCourse } from "../voting/votes";
 export interface AdminDependencies {
   db: Db;
   events: EventHub;
+  audit: AuditLog;
   now?: () => Date;
 }
 
@@ -41,10 +51,40 @@ function readName(value: unknown): string | null {
 }
 
 /**
+ * Reads an optional voting deadline: an ISO timestamp, or null to keep voting open.
+ * Returns undefined for anything else.
+ * @param {unknown} value
+ */
+function readDeadline(value: unknown): Date | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/**
+ * Converts a module row to its API shape.
+ * @param {typeof modules.$inferSelect} row
+ */
+function toModule(row: typeof modules.$inferSelect): Module {
+  return { ...row, votingEndsAt: row.votingEndsAt?.toISOString() ?? null };
+}
+
+/**
+ * Returns the value if it is a whole semester number from 1 to MAX_SEMESTER, otherwise null.
+ * @param {unknown} value
+ */
+function readSemester(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_SEMESTER
+    ? (value as number)
+    : null;
+}
+
+/**
  * Builds the /api/admin router: courses, their modules and user roles. Admins only.
  * @param {AdminDependencies} dependencies
  */
-export function createAdminRouter({ db, events, now = () => new Date() }: AdminDependencies) {
+export function createAdminRouter({ db, events, audit, now = () => new Date() }: AdminDependencies) {
   const router = Router();
   router.use(requireRole({ db, role: "admin", now }));
 
@@ -65,6 +105,22 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     courseId: courses.id,
     courseName: courses.name,
   };
+
+  /** Records an admin change in the audit log, with the admin who made it. */
+  function recordAudit(
+    request: Request,
+    response: Response,
+    action: AuditAction,
+    extras: { targetUserId?: string; email?: string | null; label?: string | null } = {},
+  ) {
+    return audit.record({
+      category: "audit",
+      action,
+      actorUserId: (response.locals.user as AuthUser).id,
+      ip: request.ip,
+      ...extras,
+    });
+  }
 
   /** Loads one course with its counts, or undefined. */
   async function findCourse(courseId: string): Promise<AdminCourse | undefined> {
@@ -101,6 +157,7 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     if (!name) return sendError(response, 400, "invalid_request");
     try {
       const [created] = await db.insert(courses).values({ name, joinCode: generateJoinCode(name) }).returning();
+      await recordAudit(request, response, "course.created", { label: name });
       await sendCourse(response, 201, created!.id);
     } catch (error) {
       if (isUniqueViolation(error)) return sendError(response, 409, "course_exists");
@@ -115,6 +172,27 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     const [course] = await db.select({ name: courses.name }).from(courses).where(eq(courses.id, courseId));
     if (!course) return sendError(response, 404, "not_found");
     await db.update(courses).set({ joinCode: generateJoinCode(course.name) }).where(eq(courses.id, courseId));
+    await recordAudit(request, response, "course.join_code_rotated", { label: course.name });
+    await sendCourse(response, 200, courseId);
+  });
+
+  // The join code keeps its old prefix on purpose: renaming must not break links already shared.
+  router.patch("/courses/:courseId", async (request, response) => {
+    const { courseId } = request.params;
+    const name = readName(readBody(request).name);
+    if (!isUuid(courseId)) return sendError(response, 404, "not_found");
+    if (!name) return sendError(response, 400, "invalid_request");
+    const before = await findCourse(courseId);
+    try {
+      const updated = await db.update(courses).set({ name }).where(eq(courses.id, courseId)).returning({ id: courses.id });
+      if (updated.length === 0) return sendError(response, 404, "not_found");
+    } catch (error) {
+      if (isUniqueViolation(error)) return sendError(response, 409, "course_exists");
+      throw error;
+    }
+    await recordAudit(request, response, "course.renamed", { label: `${before?.name ?? "?"} → ${name}` });
+    // Members see the course name in the overview.
+    events.publish(courseId, { type: "modules-changed" });
     await sendCourse(response, 200, courseId);
   });
 
@@ -122,12 +200,16 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
   router.delete("/courses/:courseId", async (request, response) => {
     const { courseId } = request.params;
     if (!isUuid(courseId)) return sendError(response, 404, "not_found");
+    const existing = await findCourse(courseId);
     const hasNoMembers = sql`not exists (select 1 from ${courseMembers} where ${courseMembers}.course_id = ${courses}.id)`;
     const deleted = await db
       .delete(courses)
       .where(and(eq(courses.id, courseId), hasNoMembers))
       .returning({ id: courses.id });
-    if (deleted.length === 1) return response.status(204).end();
+    if (deleted.length === 1) {
+      await recordAudit(request, response, "course.deleted", { label: existing?.name });
+      return response.status(204).end();
+    }
     const course = await findCourse(courseId);
     return course ? sendError(response, 409, "course_not_empty") : sendError(response, 404, "not_found");
   });
@@ -135,28 +217,87 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
   router.get("/courses/:courseId/modules", async (request, response) => {
     const { courseId } = request.params;
     if (!isUuid(courseId) || !(await findCourse(courseId))) return sendError(response, 404, "not_found");
-    const rows: Module[] = await db
+    const rows = await db
       .select()
       .from(modules)
       .where(eq(modules.courseId, courseId))
       .orderBy(asc(modules.semester), asc(modules.name));
-    const body: ModulesResponse = { modules: rows };
+    const body: ModulesResponse = { modules: rows.map(toModule) };
     response.json(body);
   });
 
   router.post("/courses/:courseId/modules", async (request, response) => {
     const { courseId } = request.params;
-    if (!isUuid(courseId) || !(await findCourse(courseId))) return sendError(response, 404, "not_found");
+    const course = isUuid(courseId) ? await findCourse(courseId) : undefined;
+    if (!course) return sendError(response, 404, "not_found");
     const fields = readBody(request);
     const name = readName(fields.name);
-    const semester = fields.semester;
-    const isValidSemester = Number.isInteger(semester) && (semester as number) >= 1 && (semester as number) <= MAX_SEMESTER;
-    if (!name || !isValidSemester) return sendError(response, 400, "invalid_request");
+    const semester = readSemester(fields.semester);
+    const votingEndsAt = "votingEndsAt" in fields ? readDeadline(fields.votingEndsAt) : null;
+    if (!name || semester === null || votingEndsAt === undefined) return sendError(response, 400, "invalid_request");
 
-    const [created] = await db.insert(modules).values({ courseId, name, semester: semester as number }).returning();
+    const [created] = await db.insert(modules).values({ courseId, name, semester, votingEndsAt }).returning();
+    await recordAudit(request, response, "module.created", { label: `${name} (${course.name})` });
     events.publish(courseId, { type: "modules-changed" });
-    const body: ModuleResponse = { module: created! };
+    const body: ModuleResponse = { module: toModule(created!) };
     response.status(201).json(body);
+  });
+
+  // Renames a module and/or moves it to another semester; its votes and history stay with it.
+  router.patch("/modules/:moduleId", async (request, response) => {
+    const { moduleId } = request.params;
+    if (!isUuid(moduleId)) return sendError(response, 404, "not_found");
+    const fields = readBody(request);
+    const changes: { name?: string; semester?: number; votingEndsAt?: Date | null } = {};
+    if ("name" in fields) {
+      const name = readName(fields.name);
+      if (!name) return sendError(response, 400, "invalid_request");
+      changes.name = name;
+    }
+    if ("semester" in fields) {
+      const semester = readSemester(fields.semester);
+      if (semester === null) return sendError(response, 400, "invalid_request");
+      changes.semester = semester;
+    }
+    if ("votingEndsAt" in fields) {
+      const votingEndsAt = readDeadline(fields.votingEndsAt);
+      if (votingEndsAt === undefined) return sendError(response, 400, "invalid_request");
+      changes.votingEndsAt = votingEndsAt;
+    }
+    if (Object.keys(changes).length === 0) return sendError(response, 400, "invalid_request");
+
+    const [updated] = await db.update(modules).set(changes).where(eq(modules.id, moduleId)).returning();
+    if (!updated) return sendError(response, 404, "not_found");
+    await recordAudit(request, response, "module.updated", { label: updated.name });
+    events.publish(updated.courseId, { type: "modules-changed" });
+    const body: ModuleResponse = { module: toModule(updated) };
+    response.json(body);
+  });
+
+  // Ends voting now on all modules of one semester that are still open, e.g. when the exams are over.
+  router.post("/courses/:courseId/close-semester", async (request, response) => {
+    const { courseId } = request.params;
+    const course = isUuid(courseId) ? await findCourse(courseId) : undefined;
+    if (!course) return sendError(response, 404, "not_found");
+    const semester = readSemester(readBody(request).semester);
+    if (semester === null) return sendError(response, 400, "invalid_request");
+
+    const time = now();
+    const closed = await db
+      .update(modules)
+      .set({ votingEndsAt: time })
+      .where(
+        and(
+          eq(modules.courseId, courseId),
+          eq(modules.semester, semester),
+          or(isNull(modules.votingEndsAt), gt(modules.votingEndsAt, time)),
+        ),
+      )
+      .returning({ id: modules.id });
+    await recordAudit(request, response, "module.updated", { label: `${semester}. semester (${course.name})` });
+    if (closed.length > 0) events.publish(courseId, { type: "modules-changed" });
+    const body: CloseSemesterResponse = { closed: closed.length };
+    response.json(body);
   });
 
   router.delete("/modules/:moduleId", async (request, response) => {
@@ -164,6 +305,7 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     if (!isUuid(moduleId)) return sendError(response, 404, "not_found");
     const deleted = await db.delete(modules).where(eq(modules.id, moduleId)).returning();
     if (deleted.length === 0) return sendError(response, 404, "not_found");
+    await recordAudit(request, response, "module.deleted", { label: deleted[0]!.name });
     events.publish(deleted[0]!.courseId, { type: "modules-changed" });
     response.status(204).end();
   });
@@ -186,9 +328,8 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     if (courseId !== null && typeof courseId !== "string") return sendError(response, 400, "invalid_request");
     const before = isUuid(userId) ? await findUserEntry(userId) : undefined;
     if (!before) return sendError(response, 404, "not_found");
-    if (courseId !== null && (!isUuid(courseId) || !(await findCourse(courseId)))) {
-      return sendError(response, 404, "not_found");
-    }
+    const newCourse = typeof courseId === "string" && isUuid(courseId) ? await findCourse(courseId) : undefined;
+    if (courseId !== null && !newCourse) return sendError(response, 404, "not_found");
 
     await db.transaction(async (transaction) => {
       await transaction.delete(courseMembers).where(eq(courseMembers.userId, userId));
@@ -196,6 +337,11 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     });
     // Votes only count in the voter's course, so votes on the old course's modules are withdrawn.
     await withdrawVotesOutsideCourse(db, { userId, courseId, now: now() });
+    await recordAudit(request, response, "user.course_changed", {
+      targetUserId: userId,
+      email: before.email,
+      label: newCourse?.name ?? null,
+    });
     // The old course's counts changed; the user's own streams reconnect and follow the new course.
     events.userLeftCourse(userId, before.courseId !== courseId ? before.courseId : null);
     const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
@@ -217,8 +363,32 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
       .where(eq(users.id, userId))
       .returning({ id: users.id });
     if (updated.length === 0) return sendError(response, 404, "not_found");
-    const body: UserEntryResponse = { user: (await findUserEntry(userId))! };
+    const entry = (await findUserEntry(userId))!;
+    await recordAudit(request, response, "user.role_changed", { targetUserId: userId, email: entry.email, label: role as string });
+    const body: UserEntryResponse = { user: entry };
     response.json(body);
+  });
+
+  // The activity log, one category at a time, optionally filtered (see AuditLog.list).
+  const RANGE_MS: Record<AuditRange, number> = { "24h": 24 * 3600_000, "7d": 7 * 24 * 3600_000, "30d": 30 * 24 * 3600_000 };
+  router.get("/audit", async (request, response) => {
+    const { category, cursor, q, action, range } = request.query;
+    if (!AUDIT_CATEGORIES.includes(category as AuditCategory)) return sendError(response, 400, "invalid_request");
+    for (const value of [cursor, q, action, range]) {
+      if (value !== undefined && typeof value !== "string") return sendError(response, 400, "invalid_request");
+    }
+    if (typeof q === "string" && q.length > AUDIT_SEARCH_MAX_LENGTH) return sendError(response, 400, "invalid_request");
+    if (typeof action === "string" && !AUDIT_ACTIONS.includes(action as AuditAction)) return sendError(response, 400, "invalid_request");
+    if (typeof range === "string" && !AUDIT_RANGES.includes(range as AuditRange)) return sendError(response, 400, "invalid_request");
+    const page = await audit.list({
+      category: category as AuditCategory,
+      cursor: cursor as string | undefined,
+      query: q as string | undefined,
+      action: action as AuditAction | undefined,
+      since: typeof range === "string" ? new Date(now().getTime() - RANGE_MS[range as AuditRange]) : undefined,
+    });
+    if (!page) return sendError(response, 400, "invalid_request");
+    response.json(page);
   });
 
   return router;

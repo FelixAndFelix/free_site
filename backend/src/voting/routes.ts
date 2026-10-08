@@ -1,6 +1,9 @@
 import { Router, type Response } from "express";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
+  GRADE_MAX,
+  GRADE_MIN,
+  MIN_GRADES_SHOWN,
   VOTE_VALUES,
   type ApiError,
   type AuthUser,
@@ -13,7 +16,7 @@ import {
 import { requireRole } from "../auth/middleware";
 import type { Db } from "../database";
 import { isUuid, readBody, sendError } from "../http";
-import { courseMembers, courses, modules, votes } from "../schema";
+import { courseMembers, courses, grades, modules, votes } from "../schema";
 import { loadVoteHistory } from "./history";
 import type { EventHub } from "./events";
 import { changeVote, cooldownEnd } from "./votes";
@@ -63,6 +66,12 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
         id: modules.id,
         name: modules.name,
         semester: modules.semester,
+        votingEndsAt: modules.votingEndsAt,
+        gradeCount: sql<number>`(select count(*)::int from ${grades} where ${grades}.module_id = ${modules}.id)`,
+        gradeAverage: sql<string | null>`(select avg(grade_tenths) from ${grades} where ${grades}.module_id = ${modules}.id)`,
+        gradeBest: sql<number | null>`(select min(grade_tenths) from ${grades} where ${grades}.module_id = ${modules}.id)`,
+        gradeWorst: sql<number | null>`(select max(grade_tenths) from ${grades} where ${grades}.module_id = ${modules}.id)`,
+        myGradeTenths: sql<number | null>`(select grade_tenths from ${grades} where ${grades}.module_id = ${modules}.id and ${grades}.user_id = ${userId})`,
         free: countOf("free"),
         possible: countOf("possible"),
         impossible: countOf("impossible"),
@@ -76,13 +85,26 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
       .groupBy(modules.id)
       .orderBy(asc(modules.semester), asc(modules.name));
     const time = now();
-    return rows.map(({ free, possible, impossible, myUpdatedAt, ...module }) => ({
+    return rows.map(
+      ({ free, possible, impossible, myUpdatedAt, votingEndsAt, gradeCount, gradeAverage, gradeBest, gradeWorst, myGradeTenths, ...module }) => {
+        const votingClosed = !!votingEndsAt && votingEndsAt <= time;
+        // Others see grades only in aggregate and only once enough are in; a module still open shows none.
+        const showStats = votingClosed && gradeCount >= MIN_GRADES_SHOWN;
+        return {
       ...module,
+      votingEndsAt: votingEndsAt?.toISOString() ?? null,
+      votingClosed,
+      myGrade: myGradeTenths === null ? null : myGradeTenths / 10,
+      gradeStats: showStats
+        ? { count: gradeCount, average: Math.round(Number(gradeAverage)) / 10, best: gradeBest! / 10, worst: gradeWorst! / 10 }
+        : null,
       counts: { free, possible, impossible },
       canChangeAt: isExemptFromCooldown(user)
         ? null
         : (cooldownEnd(myUpdatedAt ? new Date(myUpdatedAt) : null, time)?.toISOString() ?? null),
-    }));
+        };
+      },
+    );
   }
 
   /**
@@ -143,6 +165,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
     if (!VOTE_VALUES.includes(value as VoteValue)) return sendError(response, 400, "invalid_request");
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
+    if (target.module.votingClosed) return sendError(response, 409, "voting_closed");
 
     const result = await changeVote(db, {
       userId: target.user.id,
@@ -158,6 +181,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
   router.delete("/modules/:moduleId/vote", async (request, response) => {
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
+    if (target.module.votingClosed) return sendError(response, 409, "voting_closed");
 
     const result = await changeVote(db, {
       userId: target.user.id,
@@ -168,6 +192,43 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
     });
     if (!result.ok) return sendCooldown(response, result.retryAt);
     await sendModule(response, target.course.id, target.user, target.module.id);
+  });
+
+  /**
+   * Reads a grade from 1.0 to 5.0 in steps of 0.1 and returns it in tenths, or null if it is anything else.
+   * @param {unknown} value
+   */
+  function readGradeTenths(value: unknown): number | null {
+    if (typeof value !== "number") return null;
+    const tenths = Math.round(value * 10);
+    const valid = Math.abs(value * 10 - tenths) < 1e-6 && tenths >= GRADE_MIN * 10 && tenths <= GRADE_MAX * 10;
+    return valid ? tenths : null;
+  }
+
+  // Grades can only be entered once voting on the module has ended; until then the grade stays hidden.
+  router.put("/modules/:moduleId/grade", async (request, response) => {
+    const tenths = readGradeTenths(readBody(request).grade);
+    if (tenths === null) return sendError(response, 400, "invalid_request");
+    const target = await findVotableModule(response, request.params.moduleId);
+    if (!target) return sendError(response, 404, "not_found");
+    if (!target.module.votingClosed) return sendError(response, 409, "voting_open");
+
+    await db
+      .insert(grades)
+      .values({ userId: target.user.id, moduleId: target.module.id, tenths, updatedAt: now() })
+      .onConflictDoUpdate({ target: [grades.userId, grades.moduleId], set: { tenths, updatedAt: now() } });
+    const [module] = await loadOverview(target.course.id, target.user, target.module.id);
+    const body: ModuleOverviewResponse = { module: module! };
+    response.json(body);
+  });
+
+  router.delete("/modules/:moduleId/grade", async (request, response) => {
+    const target = await findVotableModule(response, request.params.moduleId);
+    if (!target) return sendError(response, 404, "not_found");
+    await db.delete(grades).where(and(eq(grades.userId, target.user.id), eq(grades.moduleId, target.module.id)));
+    const [module] = await loadOverview(target.course.id, target.user, target.module.id);
+    const body: ModuleOverviewResponse = { module: module! };
+    response.json(body);
   });
 
   return router;

@@ -14,6 +14,30 @@ services:
       interval: 5s
       retries: 10
 
+  # Dumps the database at start and then daily, proves each dump can be restored, and keeps 30 days.
+  # See docs/backups.md for where the files are and how to restore.
+  backup:
+    image: postgres:17-alpine
+    entrypoint: ["sh", "/scripts/backup.sh"]
+    environment:
+      PGHOST: database
+      PGUSER: free_site
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: free_site
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - ./deploy/backup:/scripts:ro
+      # A named volume unless BACKUP_DIR is set to an absolute path on the host (recommended, see docs/backups.md).
+      - ${BACKUP_DIR:-backups}:/backups
+    healthcheck:
+      test: ["CMD", "sh", "/scripts/backup.sh", "--healthcheck"]
+      interval: 1h
+      timeout: 10s
+      start_period: 10m
+    depends_on:
+      database:
+        condition: service_healthy
+
   backend:
     build:
       context: .
@@ -22,7 +46,7 @@ services:
       DATABASE_URL: postgres://free_site:${POSTGRES_PASSWORD}@database:5432/free_site
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MAIL_FROM: ${MAIL_FROM:-free_site <free@noreply.felixkarg.de>}
+      MAIL_FROM: ${MAIL_FROM:-FreeSite <free@noreply.felixkarg.de>}
       APP_URL: ${APP_URL:-https://free.felixkarg.de}
       ADMIN_SETUP_CODE: ${ADMIN_SETUP_CODE:-}
       INSTANCE_LABEL: ${INSTANCE_LABEL:-}
@@ -42,3 +66,4 @@ services:
 
 volumes:
   database_data:
+  backups:

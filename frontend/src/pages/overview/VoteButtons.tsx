@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, LockSimple } from "@phosphor-icons/react";
 import {
   VOTE_COOLDOWN_MINUTES,
   VOTE_VALUES,
@@ -6,15 +7,14 @@ import {
   type ModuleOverviewResponse,
   type VoteValue,
 } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../../api";
+import { apiRequest } from "../../api";
+import { errorKey, useI18n } from "../../i18n";
 import { VOTE_META } from "../../votes";
 
 interface VoteButtonsProps {
   module: ModuleOverview;
   onChange: (module: ModuleOverview) => void;
 }
-
-const clockTime = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 /**
  * Returns the later of two optional ISO times, or null if neither is in the future.
@@ -48,6 +48,7 @@ function useRerenderAt(until: Date | null) {
  * @param {VoteButtonsProps} props
  */
 export function VoteButtons({ module, onChange }: VoteButtonsProps) {
+  const { t, locale } = useI18n();
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   // Set when the server refused a change, e.g. because another tab voted in the meantime.
@@ -66,7 +67,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
     setSaving(false);
     if (!result.ok) {
       if (result.error === "vote_cooldown") return setRefusedUntil(result.retryAt);
-      return setError(errorMessage(result.error));
+      return setError(t(errorKey(result.error)));
     }
     setError("");
     onChange(result.data.module);
@@ -74,7 +75,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
 
   return (
     <>
-      <div className="vote-buttons" role="group" aria-label={`Your vote for ${module.name}`}>
+      <div className="vote-buttons" role="group" aria-label={t("vote.group", { module: module.name })}>
         {VOTE_VALUES.map((value) => {
           const selected = module.myVote === value;
           return (
@@ -84,24 +85,38 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
               className={selected ? "vote-button selected" : "vote-button"}
               style={selected ? { background: VOTE_META[value].tint, borderColor: VOTE_META[value].color } : undefined}
               aria-pressed={selected}
-              disabled={saving || lockedUntil !== null}
+              disabled={saving || lockedUntil !== null || module.votingClosed}
               onClick={() => castVote(value)}
             >
-              <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
-              {VOTE_META[value].label}
-              {selected && (
-                <span className="check" aria-hidden="true">
-                  {" "}
-                  ✓
-                </span>
+              {selected ? (
+                <Check className="check" weight="bold" aria-hidden="true" />
+              ) : (
+                <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
               )}
+              {t(VOTE_META[value].labelKey)}
             </button>
           );
         })}
       </div>
-      {lockedUntil && (
-        <p className="muted vote-cooldown">
-          You can change your vote again at {clockTime.format(lockedUntil)} (once every {VOTE_COOLDOWN_MINUTES} minutes).
+      {module.votingEndsAt && (
+        <p className="vote-cooldown">
+          <LockSimple aria-hidden="true" />
+          <span>
+            {t(module.votingClosed ? "vote.closed" : "vote.closesOn", {
+              date: new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(module.votingEndsAt)),
+            })}
+          </span>
+        </p>
+      )}
+      {lockedUntil && !module.votingClosed && (
+        <p className="vote-cooldown">
+          <LockSimple aria-hidden="true" />
+          <span>
+            {t("vote.cooldown", {
+              time: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(lockedUntil),
+              minutes: VOTE_COOLDOWN_MINUTES,
+            })}
+          </span>
         </p>
       )}
       {error && <p role="alert">{error}</p>}

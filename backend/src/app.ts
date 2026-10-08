@@ -6,6 +6,7 @@ interface AppDependencies {
   checkDatabase: () => Promise<boolean>;
   authRouter: Router;
   adminRouter: Router;
+  joinRouter: Router;
   votingRouter: Router;
   trustProxy?: string;
 }
@@ -14,7 +15,7 @@ interface AppDependencies {
  * Builds the Express app with its dependencies injected.
  * @param {AppDependencies} dependencies
  */
-export function createApp({ checkDatabase, authRouter, adminRouter, votingRouter, trustProxy }: AppDependencies) {
+export function createApp({ checkDatabase, authRouter, adminRouter, joinRouter, votingRouter, trustProxy }: AppDependencies) {
   const app = express();
   if (trustProxy) app.set("trust proxy", trustProxy);
   app.use(express.json({ limit: "10kb" }));
@@ -28,6 +29,7 @@ export function createApp({ checkDatabase, authRouter, adminRouter, votingRouter
 
   app.use("/api/auth", authRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/join", joinRouter);
   // Mounted last: it requires a session for every remaining /api path.
   app.use("/api", votingRouter);
   app.use(handleError);

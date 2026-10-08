@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
-import type { CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../api";
-import { useAuth } from "../auth";
+import type { ApiErrorCode, CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
+import { apiRequest } from "../api";
+import { errorKey, useI18n } from "../i18n";
 import { useCourseEvents } from "../useCourseEvents";
 import { ModuleTile } from "./overview/ModuleTile";
 
 /** Overview of the user's course: every module grouped by semester, with vote shares and vote buttons. */
 export function HomePage() {
-  const { user, logout } = useAuth();
+  const { t } = useI18n();
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
-  const [error, setError] = useState("");
+  // The code, not the text, so the message follows a change of language.
+  const [error, setError] = useState<ApiErrorCode | null>(null);
 
   const loadOverview = useCallback(async () => {
     const result = await apiRequest<OverviewResponse>("/api/overview");
-    if (!result.ok) return setError(errorMessage(result.error));
-    setError("");
+    if (!result.ok) return setError(result.error);
+    setError(null);
     setOverview(result.data);
   }, []);
 
@@ -46,43 +46,70 @@ export function HomePage() {
     );
   }
 
-  const semesters = [...new Set(overview?.modules.map((module) => module.semester))];
+  const openModules = overview?.modules.filter((module) => !module.votingClosed) ?? [];
+  const pastModules = overview?.modules.filter((module) => module.votingClosed) ?? [];
+  const semesters = [...new Set(openModules.map((module) => module.semester))];
 
   return (
-    <div className="stack">
-      <header className="page-header">
-        <h1>{overview?.course?.name ?? "free_site"}</h1>
-        <button type="button" className="link-button" onClick={logout}>
-          Log out
-        </button>
+    <div className="stack-lg">
+      <header className="page-intro">
+        <h1>{overview?.course?.name ?? t("home.fallbackTitle")}</h1>
+        <p className="muted">{t("home.intro")}</p>
       </header>
-      <p>
-        Logged in as <strong>{user?.username}</strong> · <Link to="/account">Account</Link>
-        {user?.role === "admin" && (
-          <>
-            {" "}
-            · <Link to="/admin">Admin</Link>
-          </>
-        )}
-      </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(errorKey(error))}</p>}
+      {!overview && !error && <OverviewSkeleton />}
       {overview && !overview.course && (
-        <p className="card">You are not in a course. Ask an admin to add you to one.</p>
+        <p className="empty-state">{t("home.noCourse")}</p>
       )}
       {overview?.course && overview.modules.length === 0 && (
-        <p className="card">There are no modules in this course yet.</p>
+        <p className="empty-state">{t("home.noModules")}</p>
       )}
-      {semesters.map((semester) => (
-        <section key={semester} className="stack">
-          <h2>Semester {semester}</h2>
-          <div className="module-grid">
-            {overview!.modules
-              .filter((module) => module.semester === semester)
-              .map((module) => (
+      {semesters.map((semester) => {
+        const inSemester = openModules.filter((module) => module.semester === semester);
+        return (
+          <section key={semester} className="semester" aria-labelledby={`semester-${semester}`}>
+            <div className="semester-head">
+              <h2 id={`semester-${semester}`}>{t("common.semester", { number: semester })}</h2>
+              <span className="semester-count">{t("home.moduleCount", { count: inSemester.length })}</span>
+            </div>
+            <div className="module-grid">
+              {inSemester.map((module) => (
                 <ModuleTile key={module.id} module={module} onChange={updateModule} />
               ))}
+            </div>
+          </section>
+        );
+      })}
+      {pastModules.length > 0 && (
+        <details className="past-modules">
+          <summary>
+            <h2>{t("home.past")}</h2>
+            <span className="semester-count">{t("home.moduleCount", { count: pastModules.length })}</span>
+          </summary>
+          <p className="muted">{t("home.pastHint")}</p>
+          <div className="module-grid">
+            {pastModules.map((module) => (
+              <ModuleTile key={module.id} module={module} onChange={updateModule} />
+            ))}
           </div>
-        </section>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** Grey placeholders in the shape of module tiles while the overview loads. */
+function OverviewSkeleton() {
+  const { t } = useI18n();
+  return (
+    <div className="module-grid" role="status" aria-label={t("home.loadingModules")}>
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="card module-tile skeleton" aria-hidden="true">
+          <span className="skeleton-line skeleton-title" />
+          <span className="skeleton-line" />
+          <span className="skeleton-line skeleton-bar" />
+          <span className="skeleton-line skeleton-buttons" />
+        </div>
       ))}
     </div>
   );

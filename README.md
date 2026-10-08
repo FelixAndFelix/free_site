@@ -1,15 +1,25 @@
-# free_site
+# FreeSite
 
 Webapp for students to call out which exams are free this semester.
 
 Live at [free.felixkarg.de](https://free.felixkarg.de).
+
+## Features
+
+- Vote per module whether its exam is free, possible or impossible, with live results for the course
+- Join a course by code or invite link (`/join/<code>`); one course per account
+- English and German, chosen per account; installable as a PWA
+- Admins manage courses, modules and users and read the activity and access logs
+- Daily database backups with a verified restore
 
 ## Planning
 
 - [`planning/Decisions.md`](planning/Decisions.md) — architecture and process decisions (source of truth)
 - [`planning/UserFocusedDesignJournal.md`](planning/UserFocusedDesignJournal.md) — the design dialogue behind those decisions
 - [`planning/DevelopingRules.md`](planning/DevelopingRules.md) — commit, branching and code-style conventions
+- [`DESIGN.md`](DESIGN.md) — the visual design system: tokens, type, components and rules for new screens
 - [`docs/deployment.md`](docs/deployment.md) — one-time production deploy setup
+- [`docs/backups.md`](docs/backups.md) — database backups, off-site copies and how to restore
 
 Privacy information for users is on [free.felixkarg.de/privacy](https://free.felixkarg.de/privacy); security reports go to the contact in [`security.txt`](https://free.felixkarg.de/.well-known/security.txt).
 
@@ -29,6 +39,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run e2e        # browser tests, see e2e/README.md
 ```
 
 Run the full stack locally with Docker Compose:

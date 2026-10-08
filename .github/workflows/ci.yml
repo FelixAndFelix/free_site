@@ -39,3 +39,51 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The backup scripts run in the same image as in production, against the service database.
+      - name: Test backup scripts
+        run: >
+          docker run --rm --network host
+          -e PGHOST=localhost -e PGUSER=free_site -e PGPASSWORD=ci
+          -v "$PWD/deploy/backup:/scripts:ro"
+          postgres:17-alpine sh /scripts/test.sh
+
+  # Drives the real backend, database and built frontend in a browser. A separate job, so a slow
+  # browser run does not delay the fast checks above and each job has its own database.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: free_site
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: free_site
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U free_site"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://free_site:ci@localhost:5432/free_site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      # Traces, screenshots and the backend log make a failure debuggable without rerunning it.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            e2e/.backend.log
+          retention-days: 7

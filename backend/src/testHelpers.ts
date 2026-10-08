@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
 import request from "supertest";
 import { createAdminRouter } from "./admin/routes";
+import { createAuditLog, type AuditLog } from "./audit/log";
 import { createApp } from "./app";
+import { createJoinRouter } from "./join/routes";
 import { createAuthRouter } from "./auth/routes";
 import type { Db } from "./database";
 import type { Mail } from "./mail";
@@ -18,7 +20,7 @@ export const TEST_SETUP_CODE = "setup-code-for-tests";
  * @param {Db} db
  */
 export async function resetDatabase(db: Db) {
-  await db.execute(sql`truncate users, courses, email_codes, sessions cascade`);
+  await db.execute(sql`truncate users, courses, email_codes, sessions, audit_log cascade`);
   await db.insert(courses).values({ name: "WWI 2024", joinCode: TEST_COURSE_CODE });
 }
 
@@ -31,11 +33,13 @@ export function createTestApp({
   sentMails,
   now,
   events = createEventHub(),
+  audit = createAuditLog(db, now),
 }: {
   db: Db;
   sentMails: Mail[];
   now: () => Date;
   events?: EventHub;
+  audit?: AuditLog;
 }) {
   const authRouter = createAuthRouter({
     db,
@@ -45,11 +49,20 @@ export function createTestApp({
     appUrl: "https://free.example",
     adminSetupCode: TEST_SETUP_CODE,
     onAccountDeleted: events.userLeftCourse,
+    audit,
     now,
   });
-  const adminRouter = createAdminRouter({ db, events, now });
+  const adminRouter = createAdminRouter({ db, events, audit, now });
+  const joinRouter = createJoinRouter({ db, events, audit, now });
   const votingRouter = createVotingRouter({ db, events, now });
-  return createApp({ checkDatabase: async () => true, authRouter, adminRouter, votingRouter, trustProxy: "loopback" });
+  return createApp({
+    checkDatabase: async () => true,
+    authRouter,
+    adminRouter,
+    joinRouter,
+    votingRouter,
+    trustProxy: "loopback",
+  });
 }
 
 /**

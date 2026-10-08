@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { USER_ROLES, VOTE_VALUES } from "@free-site/shared";
+import { AUDIT_CATEGORIES, USER_ROLES, VOTE_VALUES, type AuditAction, type Language } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
 export const voteValue = pgEnum("vote_value", VOTE_VALUES);
+export const auditCategory = pgEnum("audit_category", AUDIT_CATEGORIES);
 export const emailCodePurpose = pgEnum("email_code_purpose", ["register", "reset"]);
 
 // username is nullable only for accounts created before usernames existed; they choose one after login.
@@ -15,6 +16,7 @@ export const users = pgTable(
     username: text("username"),
     passwordHash: text("password_hash").notNull(),
     role: userRole("role").notNull().default("user"),
+    language: text("language").$type<Language>().notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`)],
@@ -72,6 +74,8 @@ export const modules = pgTable(
       .references(() => courses.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     semester: integer("semester").notNull(),
+    // From this time on the verdict is frozen: votes can no longer be set, changed or withdrawn.
+    votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }),
   },
   (table) => [index("modules_course_id_idx").on(table.courseId)],
 );
@@ -94,6 +98,23 @@ export const votes = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("votes_module_id_idx").on(table.moduleId)],
 );
 
+// A student's own grade for a module, in tenths (10 = 1.0, 50 = 5.0), entered after voting ended.
+// Linked to user_id and deleted with the account; others only ever see an average over many grades.
+export const grades = pgTable(
+  "grades",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
+    tenths: integer("grade_tenths").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("grades_module_id_idx").on(table.moduleId)],
+);
+
 // Append-only history of vote changes for the graphs over time. It stores no user id, so the
 // history cannot be linked to a person and stays intact when an account is deleted.
 // fromValue null = a new vote, toValue null = a withdrawn vote.
@@ -109,4 +130,29 @@ export const voteChanges = pgTable(
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull(),
   },
   (table) => [index("vote_changes_module_id_changed_at_idx").on(table.moduleId, table.changedAt)],
+);
+
+// What admins changed ("audit") and who signed in or out of accounts ("access"). Users are linked with
+// ON DELETE SET NULL, but email and ip are kept as written, so the log still shows who and from where
+// until the retention time ends (see RETENTION_DAYS in audit/log.ts and the privacy page).
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    category: auditCategory("category").notNull(),
+    action: text("action").$type<AuditAction>().notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    label: text("label"),
+    // The email address the event is about: the account for access events, the affected user for
+    // admin changes to a user, or the address that was typed for a failed login.
+    email: text("email"),
+    ip: text("ip"),
+  },
+  (table) => [
+    index("audit_log_category_created_idx").on(table.category, table.createdAt),
+    index("audit_log_actor_idx").on(table.actorUserId),
+    index("audit_log_target_idx").on(table.targetUserId),
+  ],
 );

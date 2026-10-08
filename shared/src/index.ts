@@ -10,6 +10,19 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const PASSWORD_MIN_LENGTH = 10;
 export const PASSWORD_MAX_LENGTH = 256;
 
+/** Interface languages. The privacy page stays English only. */
+export const LANGUAGES = ["en", "de"] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = "en";
+
+/**
+ * Narrows a value to a supported language.
+ * @param {unknown} value
+ */
+export function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && (LANGUAGES as readonly string[]).includes(value);
+}
+
 /** The logged-in user as returned by the auth endpoints. */
 export interface AuthUser {
   id: string;
@@ -17,6 +30,8 @@ export interface AuthUser {
   /** Shown instead of the email; null only for accounts that have not chosen one yet. */
   username: string | null;
   role: UserRole;
+  /** The interface language chosen for this account; also the language of its emails. */
+  language: Language;
 }
 
 export const USERNAME_MIN_LENGTH = 3;
@@ -31,6 +46,8 @@ export interface RegisterStartRequest {
   courseCode: string;
   /** Only for the first admin; must match ADMIN_SETUP_CODE while no admin exists. */
   adminSetupCode?: string;
+  /** The language the visitor reads the page in; the code mail is written in it. */
+  language?: Language;
 }
 
 /** Body of POST /api/auth/register/complete. */
@@ -41,6 +58,13 @@ export interface RegisterCompleteRequest {
   code: string;
   password: string;
   adminSetupCode?: string;
+  /** Becomes the language of the new account. */
+  language?: Language;
+}
+
+/** Body of PUT /api/auth/language. */
+export interface SetLanguageRequest {
+  language: Language;
 }
 
 /** Body of PUT /api/auth/username. */
@@ -67,6 +91,8 @@ export interface LoginRequest {
 /** Body of POST /api/auth/reset/start. */
 export interface ResetStartRequest {
   email: string;
+  /** The language the visitor reads the page in; the code mail is written in it. */
+  language?: Language;
 }
 
 /** Body of POST /api/auth/reset/complete. */
@@ -100,7 +126,10 @@ export type ApiErrorCode =
   | "cannot_change_own_role"
   | "course_not_empty"
   | "vote_cooldown"
+  | "voting_closed"
+  | "voting_open"
   | "last_admin"
+  | "already_in_course"
   | "internal_error";
 
 /** Body of every error response. */
@@ -128,6 +157,8 @@ export interface Module {
   courseId: string;
   name: string;
   semester: number;
+  /** ISO time at which voting ends, or null while voting stays open. */
+  votingEndsAt: string | null;
 }
 
 /** A user as listed for admins. */
@@ -149,6 +180,29 @@ export interface CreateCourseRequest {
 export interface CreateModuleRequest {
   name: string;
   semester: number;
+}
+
+/** Body of PATCH /api/admin/modules/:moduleId; at least one field. */
+export interface UpdateModuleRequest {
+  name?: string;
+  semester?: number;
+  /** ISO time at which voting ends; null reopens voting. */
+  votingEndsAt?: string | null;
+}
+
+/** Body of POST /api/admin/courses/:courseId/close-semester: ends voting now on a semester's open modules. */
+export interface CloseSemesterRequest {
+  semester: number;
+}
+
+/** Response body of POST /api/admin/courses/:courseId/close-semester. */
+export interface CloseSemesterResponse {
+  closed: number;
+}
+
+/** Body of PATCH /api/admin/courses/:courseId. */
+export interface RenameCourseRequest {
+  name: string;
 }
 
 /** Body of PUT /api/admin/users/:userId/course; null removes the user from their course. */
@@ -199,10 +253,37 @@ export interface ModuleOverview {
   id: string;
   name: string;
   semester: number;
+  /** ISO time at which voting ends, or null while voting stays open. */
+  votingEndsAt: string | null;
+  /** True once the deadline has passed: the verdict is frozen and nobody can vote. */
+  votingClosed: boolean;
+  /** The user's own grade for this module (1.0 to 5.0), or null. */
+  myGrade: number | null;
+  /** Average, best and worst grade of the course; null until enough grades are in. */
+  gradeStats: GradeStats | null;
   counts: VoteCounts;
   myVote: VoteValue | null;
   /** ISO time from which the user may change their vote again; null if they may change it now. */
   canChangeAt: string | null;
+}
+
+/** Best German grade is 1.0, worst passing 4.0, failed 5.0. */
+export const GRADE_MIN = 1;
+export const GRADE_MAX = 5;
+/** Grades of a module are shown to others only from this many grades on, so none can be traced to a person. */
+export const MIN_GRADES_SHOWN = 5;
+
+/** Summary of a module's grades, shown only once at least MIN_GRADES_SHOWN were entered. */
+export interface GradeStats {
+  count: number;
+  average: number;
+  best: number;
+  worst: number;
+}
+
+/** Body of PUT /api/modules/:moduleId/grade; a grade from 1.0 to 5.0 in steps of 0.1. */
+export interface GradeRequest {
+  grade: number;
 }
 
 /** Response body of GET /api/overview; course is null for users who are in no course. */
@@ -242,3 +323,131 @@ export interface ModuleDetailResponse {
 export type CourseEvent =
   | { type: "module-votes"; moduleId: string; counts: VoteCounts }
   | { type: "modules-changed" };
+
+/**
+ * Response body of GET /api/join/:code, the public look-up behind an invite link.
+ * membership is only present for logged-in users: "none" (no course yet), "same" (already a
+ * member) or "other" (in a different course; currentCourseName says which).
+ */
+export interface JoinInfoResponse {
+  course: { name: string };
+  membership?: "none" | "same" | "other";
+  currentCourseName?: string;
+}
+
+/** Body of POST /api/join/:code; confirmSwitch is required to leave another course. */
+export interface JoinRequest {
+  confirmSwitch?: boolean;
+}
+
+/** Response body of POST /api/join/:code: the course the user is now in. */
+export interface JoinResponse {
+  course: { id: string; name: string };
+}
+
+/**
+ * Two logs, kept apart because they are kept for different times and answer different questions:
+ * "audit" records what admins changed, "access" records who signed in or out of the app and how
+ * accounts were created, recovered or deleted.
+ */
+export const AUDIT_CATEGORIES = ["audit", "access"] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+export const AUDIT_ACTIONS = [
+  // audit: admin changes
+  "course.created",
+  "course.renamed",
+  "course.deleted",
+  "course.join_code_rotated",
+  "module.created",
+  "module.updated",
+  "module.deleted",
+  "user.role_changed",
+  "user.course_changed",
+  // access: sign-ins and accounts
+  "account.registered",
+  "login.succeeded",
+  "login.failed",
+  "password_reset.requested",
+  "password_reset.completed",
+  "admin.claimed",
+  "account.deleted",
+  "course.joined",
+  "course.switched",
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** Which actions belong to which log; the filter by event offers the actions of the log being viewed. */
+export const AUDIT_ACTIONS_BY_CATEGORY: Record<AuditCategory, readonly AuditAction[]> = {
+  audit: [
+    "course.created",
+    "course.renamed",
+    "course.deleted",
+    "course.join_code_rotated",
+    "module.created",
+    "module.updated",
+    "module.deleted",
+    "user.role_changed",
+    "user.course_changed",
+  ],
+  access: [
+    "account.registered",
+    "login.succeeded",
+    "login.failed",
+    "password_reset.requested",
+    "password_reset.completed",
+    "admin.claimed",
+    "account.deleted",
+    "course.joined",
+    "course.switched",
+  ],
+};
+
+/** Time ranges the log can be limited to, counted back from now: 24 hours, 7 days, 30 days. */
+export const AUDIT_RANGES = ["24h", "7d", "30d"] as const;
+export type AuditRange = (typeof AUDIT_RANGES)[number];
+
+/**
+ * Narrows a value to an audit action.
+ * @param {unknown} value
+ */
+export function isAuditAction(value: unknown): value is AuditAction {
+  return typeof value === "string" && (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * Narrows a value to an audit time range.
+ * @param {unknown} value
+ */
+export function isAuditRange(value: unknown): value is AuditRange {
+  return typeof value === "string" && (AUDIT_RANGES as readonly string[]).includes(value);
+}
+
+/** Longest search text the log accepts. */
+export const AUDIT_SEARCH_MAX_LENGTH = 100;
+
+/** One entry of the activity log as shown to admins. */
+export interface AuditEntry {
+  id: string;
+  createdAt: string;
+  category: AuditCategory;
+  action: AuditAction;
+  /** Who did it; null if unknown or if that account has been deleted since. */
+  actor: string | null;
+  /** The current email address of that account. */
+  actorEmail: string | null;
+  /** Whom it concerned (another user); null if none or deleted since. */
+  target: string | null;
+  /** The email address the event is about, as it was at the time (also for failed logins of unknown addresses). */
+  email: string | null;
+  /** What it concerned that is not a user: a course or module name, or the new role. */
+  label: string | null;
+  /** The address the request came from. */
+  ip: string | null;
+}
+
+/** Response body of GET /api/admin/audit: newest first, nextCursor continues with older entries. */
+export interface AuditResponse {
+  entries: AuditEntry[];
+  nextCursor: string | null;
+}

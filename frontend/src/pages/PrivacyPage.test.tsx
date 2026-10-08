@@ -40,11 +40,17 @@ describe("PrivacyPage", () => {
       "Username",
       "Password",
       "Course and role",
+      "Language",
+      "Language choice in your browser",
       "Your votes",
+      "Your grades",
       "Vote history",
       "Session cookie",
       "Email codes",
       "IP address",
+      "Activity log",
+      "Access log",
+      "Database backups",
     ]);
   });
 

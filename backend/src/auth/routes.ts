@@ -1,7 +1,15 @@
 import { Router, type Response } from "express";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { USERNAME_PATTERN, type AuthUser, type UserResponse } from "@free-site/shared";
+import {
+  DEFAULT_LANGUAGE,
+  USERNAME_PATTERN,
+  isLanguage,
+  type AuthUser,
+  type Language,
+  type UserResponse,
+} from "@free-site/shared";
 import { createHash, timingSafeEqual } from "node:crypto";
+import type { AuditLog } from "../audit/log";
 import { isUniqueViolation, type Db } from "../database";
 import { readBody, readFields, sendError } from "../http";
 import type { SendMail } from "../mail";
@@ -28,6 +36,8 @@ export interface AuthDependencies {
   appUrl: string;
   instanceLabel?: string;
   adminSetupCode?: string;
+  /** Where sign-ins and account events are recorded. */
+  audit: AuditLog;
   /** Told when an account is deleted, so live viewers of the course reload and streams close. */
   onAccountDeleted?: (userId: string, courseId: string | null) => void;
   now?: () => Date;
@@ -43,6 +53,14 @@ const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const USERNAME_CHANGES_PER_DAY = 10;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Reads the optional language of a request body; anything unsupported counts as the default.
+ * @param {unknown} value
+ */
+function readLanguage(value: unknown): Language {
+  return isLanguage(value) ? value : DEFAULT_LANGUAGE;
+}
 
 /**
  * Trims a username and returns it if it matches the username rules, otherwise null.
@@ -74,6 +92,7 @@ export function createAuthRouter({
   appUrl,
   instanceLabel,
   adminSetupCode,
+  audit,
   onAccountDeleted = () => {},
   now = () => new Date(),
 }: AuthDependencies) {
@@ -89,12 +108,12 @@ export function createAuthRouter({
    * Issues a code and mails it, unless the address already got a code this minute or its hourly
    * maximum. Callers answer the same either way, so the response never reveals which case applied.
    */
-  async function sendCodeMail(email: string, purpose: "register" | "reset") {
+  async function sendCodeMail(email: string, purpose: "register" | "reset", language: Language) {
     if (codeMailsPerAddress.isLimited(email)) return;
     const code = await issueEmailCode(db, email, purpose, now());
     if (!code) return;
     codeMailsPerAddress.hit(email);
-    await sendMail(buildCodeMail({ to: email, purpose, code, appUrl, instanceLabel }));
+    await sendMail(buildCodeMail({ to: email, purpose, code, appUrl, instanceLabel, language }));
   }
 
   /** True if the domain after the last @ is exactly one of the allowed domains. */
@@ -146,8 +165,8 @@ export function createAuthRouter({
   }
 
   /** Sends the user back as the response body. */
-  function sendUser(response: Response, status: number, { id, email, username, role }: AuthUser) {
-    const body: UserResponse = { user: { id, email, username, role } };
+  function sendUser(response: Response, status: number, { id, email, username, role, language }: AuthUser) {
+    const body: UserResponse = { user: { id, email, username, role, language } };
     response.status(status).json(body);
   }
 
@@ -169,7 +188,7 @@ export function createAuthRouter({
     }
 
     // Registered addresses get the same answer but no mail, so this does not reveal accounts.
-    if (!(await findUserByEmail(email))) await sendCodeMail(email, "register");
+    if (!(await findUserByEmail(email))) await sendCodeMail(email, "register", readLanguage(readBody(request).language));
     response.status(202).json({});
   });
 
@@ -196,7 +215,10 @@ export function createAuthRouter({
     let user;
     try {
       user = await db.transaction(async (transaction) => {
-        const [created] = await transaction.insert(users).values({ email, username, passwordHash, role }).returning();
+        const [created] = await transaction
+          .insert(users)
+          .values({ email, username, passwordHash, role, language: readLanguage(readBody(request).language) })
+          .returning();
         await transaction.insert(courseMembers).values({ courseId, userId: created!.id });
         return created!;
       });
@@ -206,6 +228,7 @@ export function createAuthRouter({
       throw error;
     }
     await startSession(response, user.id);
+    await audit.record({ category: "access", action: "account.registered", actorUserId: user.id, email, ip: request.ip });
     sendUser(response, 201, user);
   });
 
@@ -221,10 +244,14 @@ export function createAuthRouter({
     if (!(await verifyPassword(user?.passwordHash, fields.password)) || !user) {
       loginThrottle.recordFailure(email);
       failedLoginsPerIp.hit(ip);
+      // The typed address is logged even if no account has it. Only failures that got past the rate
+      // limits are logged, so an attacker cannot fill the log.
+      await audit.record({ category: "access", action: "login.failed", targetUserId: user?.id, email, ip });
       return sendError(response, 401, "invalid_credentials");
     }
     loginThrottle.reset(email);
     await startSession(response, user.id);
+    await audit.record({ category: "access", action: "login.succeeded", actorUserId: user.id, email, ip });
     sendUser(response, 200, user);
   });
 
@@ -248,6 +275,16 @@ export function createAuthRouter({
     sendUser(response, 200, { ...user, username });
   });
 
+  // The interface language belongs to the account, so it follows the user to every device.
+  router.put("/language", async (request, response) => {
+    const user = await readSessionUser(db, request, now());
+    if (!user) return sendError(response, 401, "unauthenticated");
+    const language = readBody(request).language;
+    if (!isLanguage(language)) return sendError(response, 400, "invalid_request");
+    await db.update(users).set({ language }).where(eq(users.id, user.id));
+    sendUser(response, 200, { ...user, language });
+  });
+
   // For accounts registered before the first admin existed; same rules as at registration.
   router.post("/claim-admin", async (request, response) => {
     if (!setupCodeLimiter.hit(request.ip ?? "unknown")) return sendError(response, 429, "rate_limited");
@@ -257,6 +294,7 @@ export function createAuthRouter({
       return sendError(response, 400, "invalid_setup_code");
     }
     await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+    await audit.record({ category: "access", action: "admin.claimed", actorUserId: user.id, email: user.email, ip: request.ip });
     sendUser(response, 200, { ...user, role: "admin" });
   });
 
@@ -278,6 +316,8 @@ export function createAuthRouter({
     if (await isLastAdmin(db, user.id)) return sendError(response, 409, "last_admin");
 
     const courseId = await deleteAccount(db, { userId: user.id, now: now() });
+    // The account is gone, so no user is linked; the address and email show whose account it was.
+    await audit.record({ category: "access", action: "account.deleted", email: sessionUser.email, ip: request.ip });
     loginThrottle.reset(sessionUser.email);
     onAccountDeleted(user.id, courseId);
     response.clearCookie(SESSION_COOKIE, { path: "/" });
@@ -304,10 +344,16 @@ export function createAuthRouter({
     const email = normalizeEmail(fields.email);
     if (!email) return sendError(response, 400, "invalid_email");
 
-    if (await findUserByEmail(email)) {
+    const account = await findUserByEmail(email);
+    if (account) {
+      // The language the visitor reads the page in wins; without one the mail follows the account.
+      const requested = readBody(request).language;
+      const language = isLanguage(requested) ? requested : account.language;
       // A failed send is logged, not returned, so the response never depends on the account existing.
-      await sendCodeMail(email, "reset").catch((error: unknown) => console.error("reset mail failed", error));
+      await sendCodeMail(email, "reset", language).catch((error: unknown) => console.error("reset mail failed", error));
     }
+    // Logged for unknown addresses too (the response is the same either way); bounded by the per-IP limit above.
+    await audit.record({ category: "access", action: "password_reset.requested", targetUserId: account?.id, email, ip: request.ip });
     response.status(202).json({});
   });
 
@@ -325,6 +371,7 @@ export function createAuthRouter({
     await db.update(users).set({ passwordHash: await hashPassword(fields.password) }).where(eq(users.id, user.id));
     await deleteUserSessions(db, user.id);
     loginThrottle.reset(email);
+    await audit.record({ category: "access", action: "password_reset.completed", actorUserId: user.id, email, ip: request.ip });
     response.status(204).end();
   });
 

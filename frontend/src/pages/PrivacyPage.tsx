@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { VOTE_COOLDOWN_MINUTES } from "@free-site/shared";
+import { BackLink } from "../BackLink";
 
 const CONTACT = "mail@felixkarg.de";
 const LAST_UPDATED = "27 September 2026";
@@ -10,7 +11,22 @@ const STORED_DATA = [
   ["Username", "Shown to others instead of your email", "Until you delete your account"],
   ["Password", "Login. Stored only as an Argon2id hash; nobody can read it", "Until you delete your account"],
   ["Course and role", "Which modules you see; admin rights", "Until you delete your account"],
+  [
+    "Language",
+    "Your interface language, which is also the language of the emails we send you",
+    "Until you delete your account",
+  ],
+  [
+    "Language choice in your browser",
+    "Remembers your language on this device before you log in. It stays in your browser and is never sent to us",
+    "Until you clear your browser data",
+  ],
   ["Your votes", "The totals and charts of your course", "Until you delete your account or the module is deleted"],
+  [
+    "Your grades",
+    "Grades you enter yourself after voting on a module has ended. Others see only the average, best and worst grade of the course, and only once at least 5 grades were entered",
+    "Until you remove the grade, delete your account or the module is deleted",
+  ],
   [
     "Vote history",
     "The charts over time. Stored without any link to you: module, old vote, new vote and time only",
@@ -18,21 +34,40 @@ const STORED_DATA = [
   ],
   ["Session cookie", "Keeps you logged in", "30 days, or until you log out"],
   ["Email codes", "Confirming your email and resetting your password", "10 minutes"],
-  ["IP address", "Limits against abuse, e.g. too many code requests", "In memory only, until the next server restart"],
+  [
+    "IP address",
+    "Limits against abuse, e.g. too many code requests",
+    "In memory for the limits, until the next server restart. The logs below keep it longer",
+  ],
+  [
+    "Activity log",
+    "Which admin changed what (courses, modules, roles, who is in which course) and when, with the admin's email address and IP address. Only admins can see it. For security and to resolve mistakes",
+    "1 year",
+  ],
+  [
+    "Access log",
+    "Registrations, logins, failed logins (including the email address that was typed, even if no account has it), password resets, joining a course and deleted accounts, each with the email address, IP address and time. Only admins can see it. To detect abuse and investigate security problems",
+    "90 days. Entries stay for this time even after you delete your account",
+  ],
+  [
+    "Database backups",
+    "Restoring the service after a failure. A backup is a copy of all the data above",
+    "30 days. Data you delete can remain in a backup for up to 30 days",
+  ],
 ];
 
 /** The privacy information, reachable without logging in. */
 export function PrivacyPage() {
   return (
     <article className="stack prose">
-      <Link to="/">← Back</Link>
+      <BackLink to="/">Back</BackLink>
       <h1>Privacy</h1>
       <p className="muted">Last updated: {LAST_UPDATED}</p>
 
       <section className="card">
-        <h2>Who runs free_site</h2>
+        <h2>Who runs FreeSite</h2>
         <p>
-          free_site is a private, non-commercial project by a DHBW student. It is not run by or affiliated with the
+          FreeSite is a private, non-commercial project by a DHBW student. It is not run by or affiliated with the
           DHBW. Responsible for the processing of your data (controller under the GDPR): Felix Karg,{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
         </p>
@@ -41,7 +76,7 @@ export function PrivacyPage() {
       <section className="card">
         <h2>The short version</h2>
         <ul>
-          <li>Other users only ever see totals, never who voted what.</li>
+          <li>Other users only ever see totals, never who voted what, and grades only as an average over at least 5 grades.</li>
           <li>
             <strong>The operator can link your votes to your email address</strong>, because both are stored in the
             same database. They do not look at individual votes and never share them.
@@ -77,7 +112,7 @@ export function PrivacyPage() {
         </div>
         <p>
           You can change your vote on a module once every {VOTE_COOLDOWN_MINUTES} minutes; the time of your last change
-          is stored with the vote for this. Expired codes and sessions are deleted automatically every hour.
+          is stored with the vote for this. Expired codes and sessions, and log entries past their retention time, are deleted automatically every hour.
         </p>
         <p>
           <strong>Legal basis:</strong> providing the service you signed up for (Art. 6(1)(b) GDPR); protection
@@ -111,7 +146,8 @@ export function PrivacyPage() {
           Under the GDPR you have the right to access your data, to have it corrected or deleted, to restrict or object
           to its processing and to receive it in a portable format. Write to{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. You can delete your account yourself under{" "}
-          <Link to="/account">Account</Link>; this removes your email, username, password and votes.
+          <Link to="/account">Account</Link>; this removes your email, username, password, votes and grades. Entries about
+          you in the activity log and the access log expire on their own after the times in the table above.
         </p>
         <p>You also have the right to lodge a complaint with a data protection supervisory authority.</p>
       </section>

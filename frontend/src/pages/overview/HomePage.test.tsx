@@ -11,8 +11,12 @@ const MATHE = {
   counts: { free: 3, possible: 1, impossible: 0 },
   myVote: null,
   canChangeAt: null,
+  votingEndsAt: null,
+  votingClosed: false,
+  myGrade: null,
+  gradeStats: null,
 };
-const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free", canChangeAt: null };
+const DB = { id: "m2", name: "Datenbanken", semester: 3, counts: EMPTY, myVote: "free", canChangeAt: null, votingEndsAt: null, votingClosed: false, myGrade: null, gradeStats: null };
 const IN_TEN_MINUTES = () => new Date(Date.now() + 10 * 60_000).toISOString();
 
 /**
@@ -103,6 +107,50 @@ describe("HomePage overview", () => {
     renderAt("/");
 
     expect(await screen.findByRole("link", { name: "Mathematik I" })).toHaveAttribute("href", "/modules/m1");
+  });
+
+  it("freezes a module whose voting has ended and says since when", async () => {
+    mockOverview([{ ...DB, votingEndsAt: "2026-02-01T10:00:00.000Z", votingClosed: true }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    for (const button of within(within(tile).getByRole("group")).getAllByRole("button")) expect(button).toBeDisabled();
+    expect(within(tile).getByText(/Voting ended on .*2026.*The result is final\./)).toBeInTheDocument();
+  });
+
+  it("moves modules with ended voting under Past modules and lets the user enter a grade", async () => {
+    const closed = { ...DB, votingEndsAt: "2026-02-01T10:00:00.000Z", votingClosed: true };
+    const graded = { ...closed, myGrade: 1.7 };
+    const fetchMock = mockOverview([MATHE, closed], { "PUT /api/modules/m2/grade": { status: 200, body: { module: graded } } });
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    expect(tile.closest("details")).toHaveTextContent("Past modules");
+    expect((await tileOf("Mathematik I")).closest("details")).toBeNull();
+    expect(within(tile).getByText(/appears once 5 classmates/)).toBeInTheDocument();
+    fireEvent.change(within(tile).getByLabelText(/Your grade/), { target: { value: "1.7" } });
+    fireEvent.click(within(tile).getByRole("button", { name: "Save grade" }));
+
+    expect(await within(tile).findByRole("button", { name: "Remove grade" })).toBeInTheDocument();
+    expect(sentBodies(fetchMock, "PUT", "/api/modules/m2/grade")).toEqual([{ grade: 1.7 }]);
+  });
+
+  it("shows average, best and worst grade once the server provides them", async () => {
+    const stats = { count: 7, average: 2.4, best: 1, worst: 4.3 };
+    mockOverview([{ ...DB, votingEndsAt: "2026-02-01T10:00:00.000Z", votingClosed: true, gradeStats: stats }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    expect(within(tile).getByText(/Average 2\.4, best 1\.0, worst 4\.3 \(7 grades\)/)).toBeInTheDocument();
+  });
+
+  it("announces the deadline while voting is still open", async () => {
+    mockOverview([{ ...DB, votingEndsAt: "2099-02-01T10:00:00.000Z", votingClosed: false }]);
+    renderAt("/");
+
+    const tile = await tileOf("Datenbanken");
+    expect(within(tile).getByText(/Voting ends on .*2099/)).toBeInTheDocument();
+    for (const button of within(tile).getAllByRole("button")) expect(button).toBeEnabled();
   });
 
   it("locks the buttons during the cooldown and says until when", async () => {

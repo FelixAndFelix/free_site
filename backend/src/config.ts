@@ -26,7 +26,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     // Private and loopback hops (nginx, reverse proxy, tunnel) are trusted, so req.ip is the real client.
     trustProxy: env.TRUST_PROXY ?? "loopback, linklocal, uniquelocal",
     resendApiKey: env.RESEND_API_KEY || undefined,
-    mailFrom: env.MAIL_FROM ?? "free_site <free@noreply.felixkarg.de>",
+    mailFrom: env.MAIL_FROM ?? "FreeSite <free@noreply.felixkarg.de>",
     adminSetupCode: env.ADMIN_SETUP_CODE?.trim() || undefined,
     // Set only on non-production instances (e.g. "Development"); shown in mail subjects and a banner.
     instanceLabel: env.INSTANCE_LABEL?.trim() || undefined,
