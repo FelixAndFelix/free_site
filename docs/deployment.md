@@ -28,6 +28,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    ```
    Pick a free port (`ss -tlnp`). The backend refuses to start in production without `RESEND_API_KEY`.
    Optional: `APP_URL` (default `https://free.felixkarg.de`) is the link in the mail footer.
+   Recommended: `BACKUP_DIR=` set to an absolute directory on the host for the database backups (one directory per instance, outside the runner's checkout), and `BACKUP_KEEP_DAYS` (default 30). See [backups.md](backups.md).
    Optional: `TRUST_PROXY` (default `loopback, linklocal, uniquelocal`) decides which proxy hops are trusted when reading the client IP for rate limits. The default fits a chain of LAN/Docker proxies; change it only if the rate limit sees your proxy's address instead of the client's.
 2. **GitHub: secret.** In the repo, go to Settings -> Secrets and variables -> Actions -> New repository secret. Name it `ENV_FILE_PATH` and set it to the absolute path of the env file from step 1. This keeps the path out of the public repo.
 3. **App host: runner.** Reuse an existing self-hosted runner that can reach the app host's Docker daemon, or register a new one (Settings -> Actions -> Runners -> New self-hosted runner, Linux x64, as a non-root user already in the `docker` group, run as a service). The workflow targets the `self-hosted` label only, so any such runner picks up the job.
@@ -65,7 +66,7 @@ The dev database starts empty: register again there (the setup code of the dev e
 ## Notes
 
 - The compose project names are `free-site` and `free-site-dev` (set with `-p` by the workflow), to avoid clashing with each other and with other projects on the same host. To run a command against one instance by hand, pass the same `-p`, env file and compose files as the workflow.
-- The first deploy of each instance creates its database volume. Back up `free-site_database_data` regularly: it holds all accounts, votes and the vote history the graphs are built from.
+- The first deploy of each instance creates its database volume, which holds all accounts, votes and the vote history the graphs are built from. A `backup` service in the same stack dumps it daily and proves each dump can be restored; read [backups.md](backups.md) for where the files are, the off-site copy you still have to arrange, and how to restore.
 - Database migrations run automatically when the backend starts. After a schema change in `backend/src/schema.ts`, run `npm run db:generate -w backend` and commit the new file in `backend/drizzle/`.
 - Local development: `docker compose up` loads `docker-compose.override.yml` and serves on http://localhost:8080. Without `RESEND_API_KEY`, mails (and their codes) are printed to the backend log.
 - **First admin:** register at `/register`, open "I have an admin setup code" and enter `ADMIN_SETUP_CODE`. If your account already exists, log in and open `/claim-admin` instead. The code works only while no admin exists; afterwards promote further admins on `/admin`. Courses, join codes, modules and course membership are managed there too; a course can be deleted once it has no members.

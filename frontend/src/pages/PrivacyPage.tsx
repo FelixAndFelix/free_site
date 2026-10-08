@@ -30,6 +30,11 @@ const STORED_DATA = [
   ["Session cookie", "Keeps you logged in", "30 days, or until you log out"],
   ["Email codes", "Confirming your email and resetting your password", "10 minutes"],
   ["IP address", "Limits against abuse, e.g. too many code requests", "In memory only, until the next server restart"],
+  [
+    "Database backups",
+    "Restoring the service after a failure. A backup is a copy of all the data above",
+    "30 days. Data you delete can remain in a backup for up to 30 days",
+  ],
 ];
 
 /** The privacy information, reachable without logging in. */
