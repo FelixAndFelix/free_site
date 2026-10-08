@@ -22,7 +22,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    FRONTEND_BIND=<lan-ip>:<port>
    ALLOWED_EMAIL_DOMAINS=<campus domains, comma-separated>
    RESEND_API_KEY=<from Resend>
-   MAIL_FROM=free_site <free@noreply.felixkarg.de>
+   MAIL_FROM=FreeSite <free@noreply.felixkarg.de>
    INITIAL_COURSE_JOIN_CODE=<long random, e.g. INF24B-$(openssl rand -hex 4)>
    ADMIN_SETUP_CODE=<long random, e.g. $(openssl rand -hex 16)>
    ```
@@ -48,13 +48,13 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    FRONTEND_BIND=<lan-ip>:<another free port>
    ALLOWED_EMAIL_DOMAINS=<campus domains, comma-separated>
    RESEND_API_KEY=<same key as production is fine>
-   MAIL_FROM=free_site dev <free-dev@noreply.felixkarg.de>
+   MAIL_FROM=FreeSite dev <free-dev@noreply.felixkarg.de>
    APP_URL=https://free-dev.felixkarg.de
    INITIAL_COURSE_JOIN_CODE=<different long random>
    ADMIN_SETUP_CODE=<different long random>
    INSTANCE_LABEL=Development
    ```
-   `INSTANCE_LABEL` shows a "Development instance" banner on every page and appends "(Development)" to mail subjects, so the dev instance is never mistaken for production. Leave it unset in production. The label is also baked into the web app manifest and the icons at build time, so a dev app installed on a phone gets its own name ("free_site (Development)") and blue icon.
+   `INSTANCE_LABEL` shows a "Development instance" banner on every page and appends "(Development)" to mail subjects, so the dev instance is never mistaken for production. Leave it unset in production. The label is also baked into the web app manifest and the icons at build time, so a dev app installed on a phone gets its own name ("FreeSite (Development)") and blue icon.
 2. **GitHub: secret.** Add a repository secret `DEV_ENV_FILE_PATH` with the absolute path of that file. Without it, deploys of `develop` fail with a message naming the missing secret.
 3. **Reverse proxy.** Route `free-dev.felixkarg.de` to the dev `FRONTEND_BIND` (second router in `deploy/traefik-free-site.yml`).
 4. **DNS / tunnel.** Expose `free-dev.felixkarg.de` like the other apps. Use this one-level name rather than `dev.free.felixkarg.de`: Cloudflare's free certificate covers `*.felixkarg.de` only, not a second level.

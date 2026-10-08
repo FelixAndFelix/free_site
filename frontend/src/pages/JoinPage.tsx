@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { JoinResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../api";
+import { apiRequest } from "../api";
 import { useAuth } from "../auth";
+import { errorKey, useI18n } from "../i18n";
 import { useJoinInfo } from "../useJoinInfo";
 
 /**
@@ -13,6 +14,7 @@ import { useJoinInfo } from "../useJoinInfo";
 export function JoinPage() {
   const { code = "" } = useParams();
   const { user, loading } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const lookup = useJoinInfo(code, user?.id);
   const [error, setError] = useState("");
@@ -25,14 +27,14 @@ export function JoinPage() {
       body: { confirmSwitch },
     });
     setJoining(false);
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     navigate("/");
   }
 
   if (loading || lookup.status === "loading" || lookup.status === "none") {
     return (
       <p className="muted" role="status">
-        Loading…
+        {t("common.loading")}
       </p>
     );
   }
@@ -40,31 +42,27 @@ export function JoinPage() {
   if (lookup.status === "failed") {
     return (
       <div className="card">
-        <h1>Invite link not valid</h1>
-        <p role="alert">
-          {lookup.error === "not_found"
-            ? "This link is wrong or was replaced. Ask an admin of your course for a new one."
-            : errorMessage(lookup.error)}
-        </p>
-        <Link to="/">Go to the start page</Link>
+        <h1>{t("join.invalidTitle")}</h1>
+        <p role="alert">{lookup.error === "not_found" ? t("join.invalidText") : t(errorKey(lookup.error))}</p>
+        <Link to="/">{t("join.toStart")}</Link>
       </div>
     );
   }
 
   const { info } = lookup;
-  const courseName = info.course.name;
+  const course = info.course.name;
   const target = encodeURIComponent(code);
 
   if (!user) {
     return (
       <div className="card">
-        <h1>Join {courseName}</h1>
-        <p>Vote with your course on which exams are free. Create an account, or log in if you already have one.</p>
+        <h1>{t("join.title", { course })}</h1>
+        <p>{t("join.guestText")}</p>
         <Link to={`/register?join=${target}`} className="button">
-          Create account
+          {t("join.createAccount")}
         </Link>
         <Link to={`/login?join=${target}`} className="button secondary">
-          Log in
+          {t("join.login")}
         </Link>
       </div>
     );
@@ -73,29 +71,27 @@ export function JoinPage() {
   if (info.membership === "same") {
     return (
       <div className="card">
-        <h1>You are in {courseName}</h1>
-        <p>This invite link is for your own course, so there is nothing to do.</p>
+        <h1>{t("join.sameTitle", { course })}</h1>
+        <p>{t("join.sameText")}</p>
         <Link to="/" className="button">
-          Open the overview
+          {t("join.openOverview")}
         </Link>
       </div>
     );
   }
 
   if (info.membership === "other") {
+    const current = info.currentCourseName ?? "";
     return (
       <div className="card">
-        <h1>Switch to {courseName}?</h1>
-        <p>
-          You are in {info.currentCourseName} right now. If you switch, your votes there are removed and you vote with{" "}
-          {courseName} instead.
-        </p>
+        <h1>{t("join.switchTitle", { course })}</h1>
+        <p>{t("join.switchText", { current, course })}</p>
         {error && <p role="alert">{error}</p>}
         <button type="button" disabled={joining} onClick={() => join(true)}>
-          Switch to {courseName}
+          {t("join.switchButton", { course })}
         </button>
         <Link to="/" className="button secondary">
-          Stay in {info.currentCourseName}
+          {t("join.stay", { current })}
         </Link>
       </div>
     );
@@ -103,11 +99,11 @@ export function JoinPage() {
 
   return (
     <div className="card">
-      <h1>Join {courseName}</h1>
-      <p>You are not in a course yet. Join to vote on the modules of {courseName}.</p>
+      <h1>{t("join.title", { course })}</h1>
+      <p>{t("join.noCourseText", { course })}</p>
       {error && <p role="alert">{error}</p>}
       <button type="button" disabled={joining} onClick={() => join(false)}>
-        Join {courseName}
+        {t("join.button", { course })}
       </button>
     </div>
   );

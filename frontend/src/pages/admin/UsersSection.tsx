@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type { AdminCourse, AdminUserEntry, UserEntryResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../../api";
+import { apiRequest } from "../../api";
 import { useAuth } from "../../auth";
+import { errorKey, useI18n } from "../../i18n";
 
 interface UsersSectionProps {
   users: AdminUserEntry[];
@@ -19,6 +20,7 @@ const NO_COURSE = "none";
  */
 export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
   const { user: currentUser } = useAuth();
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
@@ -41,7 +43,7 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
       method: "PUT",
       body: { courseId: courseId || null },
     });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     await onChanged();
   }
@@ -50,7 +52,7 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
   async function toggleRole(user: AdminUserEntry) {
     const role = user.role === "admin" ? "user" : "admin";
     const result = await apiRequest(`/api/admin/users/${user.id}`, { method: "PATCH", body: { role } });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     await onChanged();
   }
@@ -59,14 +61,14 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
 
   return (
     <section className="stack" aria-labelledby="users-heading">
-      <h2 id="users-heading">Users</h2>
+      <h2 id="users-heading">{t("admin.usersHeading")}</h2>
       <div className="card users-card">
         <div className="users-toolbar">
           <label className="field users-search">
-            <span>Search users</span>
+            <span>{t("admin.search")}</span>
             <input
               type="search"
-              placeholder="Username or email"
+              placeholder={t("admin.searchPlaceholder")}
               value={query}
               autoComplete="off"
               spellCheck={false}
@@ -77,7 +79,7 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
             />
           </label>
           <label className="field">
-            <span>Course</span>
+            <span>{t("admin.courseFilter")}</span>
             <select
               value={courseFilter}
               onChange={(event) => {
@@ -85,8 +87,8 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
                 setVisible(PAGE_SIZE);
               }}
             >
-              <option value="">All courses</option>
-              <option value={NO_COURSE}>No course</option>
+              <option value="">{t("admin.allCourses")}</option>
+              <option value={NO_COURSE}>{t("admin.noCourse")}</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
                   {course.name}
@@ -103,25 +105,25 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
                 setVisible(PAGE_SIZE);
               }}
             />
-            Admins only
+            {t("admin.adminsOnly")}
           </label>
         </div>
         <p className="muted" role="status">
           {matches.length === users.length
-            ? `${users.length} ${users.length === 1 ? "user" : "users"}`
-            : `${matches.length} of ${users.length} users match`}
+            ? t("admin.userCount", { count: users.length })
+            : t("admin.matchCount", { matches: matches.length, total: users.length })}
         </p>
         {matches.length === 0 ? (
-          <p className="empty-state">No users match. Change the search or the filters.</p>
+          <p className="empty-state">{t("admin.noMatch")}</p>
         ) : (
           <table className="data-table users-table">
             <thead>
               <tr>
-                <th scope="col">User</th>
-                <th scope="col">Role</th>
-                <th scope="col">Course</th>
+                <th scope="col">{t("admin.colUser")}</th>
+                <th scope="col">{t("admin.colRole")}</th>
+                <th scope="col">{t("admin.colCourse")}</th>
                 <th scope="col">
-                  <span className="visually-hidden">Actions</span>
+                  <span className="visually-hidden">{t("admin.colActions")}</span>
                 </th>
               </tr>
             </thead>
@@ -129,17 +131,17 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
               {shown.map((user) => (
                 <tr key={user.id}>
                   <th scope="row">
-                    <strong>{user.username ?? "(no username yet)"}</strong>
+                    <strong>{user.username ?? t("admin.noUsername")}</strong>
                     <span className="muted user-email">{user.email}</span>
                   </th>
-                  <td data-label="Role">{user.role === "admin" ? "Admin" : "User"}</td>
-                  <td data-label="Course">
+                  <td data-label={t("admin.colRole")}>{user.role === "admin" ? t("admin.roleAdmin") : t("admin.roleUser")}</td>
+                  <td data-label={t("admin.colCourse")}>
                     <select
-                      aria-label={`Course of ${user.email}`}
+                      aria-label={t("admin.courseOf", { email: user.email })}
                       value={user.courseId ?? ""}
                       onChange={(event) => setCourse(user, event.target.value)}
                     >
-                      <option value="">No course</option>
+                      <option value="">{t("admin.noCourse")}</option>
                       {courses.map((course) => (
                         <option key={course.id} value={course.id}>
                           {course.name}
@@ -150,7 +152,7 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
                   <td className="users-actions">
                     {user.id !== currentUser?.id && (
                       <button type="button" className="secondary" onClick={() => toggleRole(user)}>
-                        {user.role === "admin" ? "Remove admin" : "Make admin"}
+                        {user.role === "admin" ? t("admin.removeAdmin") : t("admin.makeAdmin")}
                       </button>
                     )}
                   </td>
@@ -161,7 +163,7 @@ export function UsersSection({ users, courses, onChanged }: UsersSectionProps) {
         )}
         {matches.length > visible && (
           <button type="button" className="secondary" onClick={() => setVisible((count) => count + PAGE_SIZE)}>
-            Show {Math.min(PAGE_SIZE, matches.length - visible)} more
+            {t("admin.showMore", { count: Math.min(PAGE_SIZE, matches.length - visible) })}
           </button>
         )}
         {error && <p role="alert">{error}</p>}

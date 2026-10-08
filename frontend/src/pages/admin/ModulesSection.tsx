@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { MAX_SEMESTER, type AdminCourse, type Module, type ModulesResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../../api";
+import { apiRequest } from "../../api";
 import { Field } from "../../Field";
+import { errorKey, useI18n } from "../../i18n";
 
 interface ModulesSectionProps {
   course: AdminCourse;
@@ -16,6 +17,7 @@ const SEMESTERS = Array.from({ length: MAX_SEMESTER }, (_, index) => index + 1);
  * @param {ModulesSectionProps} props
  */
 export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
+  const { t } = useI18n();
   const [modules, setModules] = useState<Module[]>([]);
   const [name, setName] = useState("");
   const [semester, setSemester] = useState(1);
@@ -27,7 +29,7 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
 
   const reloadModules = useCallback(async () => {
     const result = await apiRequest<ModulesResponse>(modulesPath);
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setModules(result.data.modules);
   }, [modulesPath]);
 
@@ -39,7 +41,7 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
   async function createModule(event: FormEvent) {
     event.preventDefault();
     const result = await apiRequest(modulesPath, { body: { name, semester } });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     setName("");
     await Promise.all([reloadModules(), onChanged()]);
@@ -59,7 +61,7 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
       method: "PATCH",
       body: { name: editName, semester: editSemester },
     });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     setEditingId(null);
     await Promise.all([reloadModules(), onChanged()]);
@@ -67,9 +69,9 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
 
   /** Deletes a module after confirmation. */
   async function deleteModule(module: Module) {
-    if (!window.confirm(`Delete ${module.name}? Its votes are deleted too.`)) return;
+    if (!window.confirm(t("admin.confirmDeleteModule", { name: module.name }))) return;
     const result = await apiRequest(`/api/admin/modules/${module.id}`, { method: "DELETE" });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     await Promise.all([reloadModules(), onChanged()]);
   }
 
@@ -77,10 +79,10 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
 
   return (
     <div className="modules">
-      {modules.length === 0 && <p className="muted">No modules yet. Add the first one below.</p>}
+      {modules.length === 0 && <p className="muted">{t("admin.noModules")}</p>}
       {usedSemesters.map((number) => (
         <div key={number} className="modules-semester">
-          <h4>Semester {number}</h4>
+          <h4>{t("common.semester", { number })}</h4>
           <ul className="list">
             {modules
               .filter((module) => module.semester === number)
@@ -88,21 +90,21 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
                 <li key={module.id} className="row">
                   {editingId === module.id ? (
                     <form className="rename-form" onSubmit={(event) => saveEdit(event, module)}>
-                      <input aria-label="Module name" value={editName} onChange={(event) => setEditName(event.target.value)} required />
+                      <input aria-label={t("admin.moduleName")} value={editName} onChange={(event) => setEditName(event.target.value)} required />
                       <select
-                        aria-label="Semester of this module"
+                        aria-label={t("admin.moduleSemester")}
                         value={editSemester}
                         onChange={(event) => setEditSemester(Number(event.target.value))}
                       >
                         {SEMESTERS.map((option) => (
                           <option key={option} value={option}>
-                            Semester {option}
+                            {t("common.semester", { number: option })}
                           </option>
                         ))}
                       </select>
-                      <button type="submit">Save</button>
+                      <button type="submit">{t("common.save")}</button>
                       <button type="button" className="secondary" onClick={() => setEditingId(null)}>
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                     </form>
                   ) : (
@@ -110,10 +112,10 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
                       <span className="module-name">{module.name}</span>
                       <span className="actions">
                         <button type="button" className="secondary" onClick={() => startEdit(module)}>
-                          Edit
+                          {t("common.edit")}
                         </button>
                         <button type="button" className="danger" onClick={() => deleteModule(module)}>
-                          Delete
+                          {t("common.delete")}
                         </button>
                       </span>
                     </>
@@ -124,9 +126,9 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
         </div>
       ))}
       <form className="inline-form" onSubmit={createModule}>
-        <Field label="New module" placeholder="Datenbanken" value={name} onValue={setName} />
+        <Field label={t("admin.newModule")} placeholder="Datenbanken" value={name} onValue={setName} />
         <label className="field">
-          <span>Semester</span>
+          <span>{t("admin.semester")}</span>
           <select value={semester} onChange={(event) => setSemester(Number(event.target.value))}>
             {SEMESTERS.map((number) => (
               <option key={number} value={number}>
@@ -135,7 +137,7 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
             ))}
           </select>
         </label>
-        <button type="submit">Add module</button>
+        <button type="submit">{t("admin.addModule")}</button>
       </form>
       {error && <p role="alert">{error}</p>}
     </div>

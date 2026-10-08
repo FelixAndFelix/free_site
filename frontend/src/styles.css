@@ -1,5 +1,5 @@
 /*
- * free_site styles. Mobile first; tokens, type scale and component rules are documented in DESIGN.md.
+ * FreeSite styles. Mobile first; tokens, type scale and component rules are documented in DESIGN.md.
  * Colors only come from the tokens below, so light and dark mode stay in step.
  */
 
@@ -371,6 +371,22 @@ main:focus {
 
 .site-footer a {
   color: var(--muted);
+}
+
+.language-switch {
+  display: inline-flex;
+  gap: 0.75rem;
+}
+
+.language-switch .link-button {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.language-switch .link-button[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 /* ---------- Panels ---------- */

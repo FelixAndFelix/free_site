@@ -7,15 +7,14 @@ import {
   type ModuleOverviewResponse,
   type VoteValue,
 } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../../api";
+import { apiRequest } from "../../api";
+import { errorKey, useI18n } from "../../i18n";
 import { VOTE_META } from "../../votes";
 
 interface VoteButtonsProps {
   module: ModuleOverview;
   onChange: (module: ModuleOverview) => void;
 }
-
-const clockTime = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 /**
  * Returns the later of two optional ISO times, or null if neither is in the future.
@@ -49,6 +48,7 @@ function useRerenderAt(until: Date | null) {
  * @param {VoteButtonsProps} props
  */
 export function VoteButtons({ module, onChange }: VoteButtonsProps) {
+  const { t, locale } = useI18n();
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   // Set when the server refused a change, e.g. because another tab voted in the meantime.
@@ -67,7 +67,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
     setSaving(false);
     if (!result.ok) {
       if (result.error === "vote_cooldown") return setRefusedUntil(result.retryAt);
-      return setError(errorMessage(result.error));
+      return setError(t(errorKey(result.error)));
     }
     setError("");
     onChange(result.data.module);
@@ -75,7 +75,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
 
   return (
     <>
-      <div className="vote-buttons" role="group" aria-label={`Your vote for ${module.name}`}>
+      <div className="vote-buttons" role="group" aria-label={t("vote.group", { module: module.name })}>
         {VOTE_VALUES.map((value) => {
           const selected = module.myVote === value;
           return (
@@ -93,7 +93,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
               ) : (
                 <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
               )}
-              {VOTE_META[value].label}
+              {t(VOTE_META[value].labelKey)}
             </button>
           );
         })}
@@ -102,8 +102,10 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
         <p className="vote-cooldown">
           <LockSimple aria-hidden="true" />
           <span>
-            You can change your vote again at {clockTime.format(lockedUntil)} (once every {VOTE_COOLDOWN_MINUTES}{" "}
-            minutes).
+            {t("vote.cooldown", {
+              time: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(lockedUntil),
+              minutes: VOTE_COOLDOWN_MINUTES,
+            })}
           </span>
         </p>
       )}

@@ -154,14 +154,14 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       const { user } = await registerWithLanguage();
 
       expect(user.language).toBe("en");
-      expect(sentMails.at(-1)!.subject).toContain("is your free_site verification code");
+      expect(sentMails.at(-1)!.subject).toContain("is your FreeSite verification code");
     });
 
     it("stores the language chosen at registration and writes the code mail in it", async () => {
       const { cookie, user } = await registerWithLanguage("de");
 
       expect(user.language).toBe("de");
-      expect(sentMails.at(-1)!.subject).toContain("ist dein free_site-Bestätigungscode");
+      expect(sentMails.at(-1)!.subject).toContain("ist dein FreeSite-Bestätigungscode");
       expect(sentMails.at(-1)!.text).toContain("Bestätige deine E-Mail-Adresse");
       const me = await request(app).get("/api/auth/me").set("Cookie", cookie);
       expect(me.body.user.language).toBe("de");
@@ -197,11 +197,11 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
       await request(app).put("/api/auth/language").set("Cookie", cookie).send({ language: "de" });
 
       await request(app).post("/api/auth/reset/start").send({ email: EMAIL }).expect(202);
-      expect(sentMails.at(-1)!.subject).toContain("ist dein free_site-Code zum Zurücksetzen des Passworts");
+      expect(sentMails.at(-1)!.subject).toContain("ist dein FreeSite-Code zum Zurücksetzen des Passworts");
 
       time += 61_000;
       await request(app).post("/api/auth/reset/start").send({ email: EMAIL, language: "en" }).expect(202);
-      expect(sentMails.at(-1)!.subject).toContain("is your free_site password reset code");
+      expect(sentMails.at(-1)!.subject).toContain("is your FreeSite password reset code");
     });
   });
 

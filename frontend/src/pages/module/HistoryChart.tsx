@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { VOTE_VALUES, type VoteHistoryDay } from "@free-site/shared";
+import { useI18n } from "../../i18n";
 import { VOTE_META } from "../../votes";
 
 const HEIGHT = 220;
@@ -8,18 +9,21 @@ const DEFAULT_WIDTH = 600;
 // Drawn last on top, so the most common overlap (two lines at 0) shows green above the others.
 const DRAW_ORDER = [...VOTE_VALUES].reverse();
 
-const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-const mediumDate = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-const longDate = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" });
-const DATE_FORMATS = { short: shortDate, medium: mediumDate, long: longDate };
+type DayStyle = "short" | "medium" | "long";
+const DAY_OPTIONS: Record<DayStyle, Intl.DateTimeFormatOptions> = {
+  short: { day: "numeric", month: "short", timeZone: "UTC" },
+  medium: { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" },
+  long: { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" },
+};
 
 /**
  * Formats a YYYY-MM-DD day for axis labels ("short"), table rows ("medium") or the tooltip ("long").
+ * @param {string} locale
  * @param {string} day
- * @param {"short" | "medium" | "long"} style
+ * @param {DayStyle} style
  */
-function formatDay(day: string, style: "short" | "medium" | "long"): string {
-  return DATE_FORMATS[style].format(new Date(`${day}T00:00:00Z`));
+function formatDay(locale: string, day: string, style: DayStyle): string {
+  return new Intl.DateTimeFormat(locale, DAY_OPTIONS[style]).format(new Date(`${day}T00:00:00Z`));
 }
 
 /**
@@ -73,6 +77,7 @@ function useWidth() {
  * @param {{history: VoteHistoryDay[]}} props
  */
 export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
+  const { t, locale } = useI18n();
   const { ref, width } = useWidth();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -114,7 +119,7 @@ export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
         {VOTE_VALUES.map((value) => (
           <span key={value} className="vote-legend-item">
             <span className="line-key" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
-            {VOTE_META[value].label}
+            {t(VOTE_META[value].labelKey)}
           </span>
         ))}
       </div>
@@ -123,7 +128,10 @@ export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
           width={width}
           height={HEIGHT}
           role="img"
-          aria-label={`Votes per day from ${formatDay(history[0]!.day, "long")} to ${formatDay(history[last]!.day, "long")}. Use the arrow keys to read single days, or open the table below.`}
+          aria-label={t("chart.label", {
+            from: formatDay(locale, history[0]!.day, "long"),
+            to: formatDay(locale, history[last]!.day, "long"),
+          })}
           tabIndex={0}
           onPointerMove={handlePointer}
           onPointerLeave={() => setActiveIndex(null)}
@@ -146,7 +154,7 @@ export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
               y={HEIGHT - 8}
               textAnchor={history.length === 1 ? "middle" : index === 0 ? "start" : index === last ? "end" : "middle"}
             >
-              {formatDay(history[index]!.day, "short")}
+              {formatDay(locale, history[index]!.day, "short")}
             </text>
           ))}
           {activeIndex !== null && (
@@ -173,26 +181,26 @@ export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
         </svg>
         {active && (
           <div className="chart-tooltip" style={{ left: tooltipLeft }} role="status">
-            <div className="muted">{formatDay(active.day, "long")}</div>
+            <div className="muted">{formatDay(locale, active.day, "long")}</div>
             {VOTE_VALUES.map((value) => (
               <div key={value} className="tooltip-row">
                 <span className="line-key" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
                 <strong>{active.counts[value]}</strong>
-                <span className="muted">{VOTE_META[value].label}</span>
+                <span className="muted">{t(VOTE_META[value].labelKey)}</span>
               </div>
             ))}
           </div>
         )}
       </div>
       <details className="chart-table">
-        <summary>Show as table</summary>
+        <summary>{t("chart.showTable")}</summary>
         <table>
           <thead>
             <tr>
-              <th scope="col">Day</th>
+              <th scope="col">{t("chart.day")}</th>
               {VOTE_VALUES.map((value) => (
                 <th key={value} scope="col">
-                  {VOTE_META[value].label}
+                  {t(VOTE_META[value].labelKey)}
                 </th>
               ))}
             </tr>
@@ -200,7 +208,7 @@ export function HistoryChart({ history }: { history: VoteHistoryDay[] }) {
           <tbody>
             {[...history].reverse().map(({ day, counts }) => (
               <tr key={day}>
-                <th scope="row">{formatDay(day, "medium")}</th>
+                <th scope="row">{formatDay(locale, day, "medium")}</th>
                 {VOTE_VALUES.map((value) => (
                   <td key={value}>{counts[value]}</td>
                 ))}

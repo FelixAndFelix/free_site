@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { CaretDown, CaretUp, Copy, PencilSimple } from "@phosphor-icons/react";
 import type { AdminCourse, CourseResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../../api";
+import { apiRequest } from "../../api";
 import { Field } from "../../Field";
+import { errorKey, useI18n } from "../../i18n";
 import { ModulesSection } from "./ModulesSection";
 
 interface CoursesSectionProps {
@@ -16,6 +17,7 @@ interface CoursesSectionProps {
  * @param {CoursesSectionProps} props
  */
 export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [openCourseIds, setOpenCourseIds] = useState<string[]>([]);
@@ -27,7 +29,7 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
   async function createCourse(event: FormEvent) {
     event.preventDefault();
     const result = await apiRequest<CourseResponse>("/api/admin/courses", { body: { name } });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     setName("");
     await onChanged();
@@ -49,7 +51,7 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
   async function renameCourse(event: FormEvent, course: AdminCourse) {
     event.preventDefault();
     const result = await apiRequest(`/api/admin/courses/${course.id}`, { method: "PATCH", body: { name: newName } });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     setRenamingId(null);
     await onChanged();
@@ -57,9 +59,9 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
 
   /** Deletes an empty course and its modules after confirmation. */
   async function deleteCourse(course: AdminCourse) {
-    if (!window.confirm(`Delete ${course.name} and its ${count(course.moduleCount, "module")}?`)) return;
+    if (!window.confirm(t("admin.confirmDeleteCourse", { name: course.name, modules: t("admin.modules", { count: course.moduleCount }) }))) return;
     const result = await apiRequest(`/api/admin/courses/${course.id}`, { method: "DELETE" });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setError("");
     setOpenCourseIds((ids) => ids.filter((id) => id !== course.id));
     await onChanged();
@@ -73,23 +75,23 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
       setError("");
       setCopiedCourseId(course.id);
     } catch {
-      setError(`Copying is not possible here. The invite link is ${link}`);
+      setError(t("admin.copyFailed", { link }));
     }
   }
 
   /** Replaces the join code of a course after confirmation. */
   async function rotateJoinCode(course: AdminCourse) {
-    if (!window.confirm(`Replace the join code of ${course.name}? The old code and invite link stop working immediately.`)) return;
+    if (!window.confirm(t("admin.confirmNewCode", { name: course.name }))) return;
     const result = await apiRequest(`/api/admin/courses/${course.id}/join-code`, { method: "POST" });
-    if (!result.ok) return setError(errorMessage(result.error));
+    if (!result.ok) return setError(t(errorKey(result.error)));
     setCopiedCourseId(null);
     await onChanged();
   }
 
   return (
     <section className="stack" aria-labelledby="courses-heading">
-      <h2 id="courses-heading">Courses</h2>
-      {courses.length === 0 && <p className="empty-state">No courses yet. Create the first one below.</p>}
+      <h2 id="courses-heading">{t("admin.coursesHeading")}</h2>
+      {courses.length === 0 && <p className="empty-state">{t("admin.noCourses")}</p>}
       <ul className="course-list">
         {courses.map((course) => {
           const open = openCourseIds.includes(course.id);
@@ -98,10 +100,10 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
               <div className="course-head">
                 {renamingId === course.id ? (
                   <form className="rename-form" onSubmit={(event) => renameCourse(event, course)}>
-                    <input aria-label={`Name of ${course.name}`} value={newName} onChange={(event) => setNewName(event.target.value)} required />
-                    <button type="submit">Save</button>
+                    <input aria-label={t("admin.courseNameOf", { name: course.name })} value={newName} onChange={(event) => setNewName(event.target.value)} required />
+                    <button type="submit">{t("common.save")}</button>
                     <button type="button" className="secondary" onClick={() => setRenamingId(null)}>
-                      Cancel
+                      {t("common.cancel")}
                     </button>
                   </form>
                 ) : (
@@ -109,12 +111,12 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
                     <div>
                       <h3>{course.name}</h3>
                       <p className="muted">
-                        {count(course.memberCount, "member")}, {count(course.moduleCount, "module")}
+                        {t("admin.members", { count: course.memberCount })}, {t("admin.modules", { count: course.moduleCount })}
                       </p>
                     </div>
                     <button type="button" className="icon-button" onClick={() => startRename(course)}>
                       <PencilSimple aria-hidden="true" />
-                      <span className="visually-hidden">Rename {course.name}</span>
+                      <span className="visually-hidden">{t("admin.rename", { name: course.name })}</span>
                     </button>
                   </>
                 )}
@@ -122,7 +124,7 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
               <div className="actions">
                 <button type="button" className="secondary" onClick={() => copyInviteLink(course)}>
                   <Copy aria-hidden="true" />
-                  <span>{copiedCourseId === course.id ? "Link copied" : "Copy invite link"}</span>
+                  <span>{copiedCourseId === course.id ? t("admin.linkCopied") : t("admin.copyLink")}</span>
                 </button>
                 <button
                   type="button"
@@ -132,10 +134,10 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
                   onClick={() => toggleModules(course.id)}
                 >
                   {open ? <CaretUp aria-hidden="true" /> : <CaretDown aria-hidden="true" />}
-                  <span>{open ? "Hide modules" : "Manage modules"}</span>
+                  <span>{open ? t("admin.hideModules") : t("admin.showModules")}</span>
                 </button>
                 <button type="button" className="secondary" onClick={() => rotateJoinCode(course)}>
-                  New join code
+                  {t("admin.newJoinCode")}
                 </button>
                 <button
                   type="button"
@@ -143,11 +145,11 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
                   disabled={course.memberCount > 0}
                   onClick={() => deleteCourse(course)}
                 >
-                  Delete
+                  {t("common.delete")}
                 </button>
               </div>
               {course.memberCount > 0 && (
-                <p className="muted hint">To delete this course, first move or remove its members under Users.</p>
+                <p className="muted hint">{t("admin.deleteHint")}</p>
               )}
               {open && (
                 <div id={`modules-${course.id}`} className="modules-panel">
@@ -159,10 +161,10 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
         })}
       </ul>
       <form className="card" onSubmit={createCourse}>
-        <h3>New course</h3>
+        <h3>{t("admin.newCourse")}</h3>
         <div className="inline-form">
-          <Field label="Course name" placeholder="INF25A" value={name} onValue={setName} />
-          <button type="submit">Create course</button>
+          <Field label={t("admin.courseName")} placeholder="INF25A" value={name} onValue={setName} />
+          <button type="submit">{t("admin.createCourse")}</button>
         </div>
       </form>
       {error && <p role="alert">{error}</p>}
@@ -176,13 +178,4 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
  */
 function inviteLink(course: AdminCourse): string {
   return `${window.location.origin}/join/${course.joinCode}`;
-}
-
-/**
- * Formats a count with a singular or plural noun, e.g. "1 member" or "12 members".
- * @param {number} amount
- * @param {string} noun
- */
-function count(amount: number, noun: string): string {
-  return `${amount} ${noun}${amount === 1 ? "" : "s"}`;
 }

@@ -52,7 +52,7 @@ describe("invite links", () => {
 
       await screen.findByRole("heading", { name: "Check your email" });
       expect(sentBodies(fetchMock, "POST", "/api/auth/register/start")).toEqual([
-        { email: "student@dhbw.example", username: "student", courseCode: CODE, adminSetupCode: "" },
+        { email: "student@dhbw.example", username: "student", courseCode: CODE, adminSetupCode: "", language: "en" },
       ]);
     });
 

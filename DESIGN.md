@@ -1,11 +1,11 @@
-# free_site design system
+# FreeSite design system
 
-How free_site looks and why. Read this before building or changing a screen; the tokens live in
+How FreeSite looks and why. Read this before building or changing a screen; the tokens live in
 `frontend/src/styles.css` and must match the values here.
 
 ## Overview
 
-free_site answers one question for a DHBW course: which exams are free? Students open it on their
+FreeSite answers one question for a DHBW course: which exams are free? Students open it on their
 phones between lectures, check a module's verdict and cast their own vote. The design is a calm,
 neutral tool so the data stands out: a cool grey page, white panels, one grotesk typeface, and the
 three vote colors as the only color on the page.
@@ -178,6 +178,19 @@ Phosphor (`@phosphor-icons/react`), regular weight, `aria-hidden` when next to a
 `ShieldCheck` (Admin), `UserCircle` (account), `SignOut`, `ArrowLeft` (back links), `CaretRight`
 (module link), `Check` (selected vote), `LockSimple` (cooldown). Do not draw icons by hand or mix
 icon families.
+
+## Language and wording
+
+- The product is written **FreeSite** (never "free_site") in the interface, emails and docs.
+- Every visible text lives in the message catalogs (`frontend/src/i18n/en.ts`, `de.ts`); components
+  call `t("key")` and never contain literal text. Add the key to both languages. Counts use a
+  `_one`/`_other` pair, names are `{placeholders}`.
+- English: sentence case, plain verbs. German: informal "du", sentence case, and the vote labels
+  "Geschenkt", "Machbar", "Unmöglich" (verdicts "Überwiegend ..." and "Eher ...").
+- Dates and times use `Intl` with the language's locale, never fixed formats.
+- The privacy page is English only on purpose and is not part of the catalogs.
+- Emails use the same palette (light and dark), the three-bar mark built from table cells, and the
+  wordmark FreeSite; their wording lives in `backend/src/mailTemplates.ts`.
 
 ## Do's and don'ts
 

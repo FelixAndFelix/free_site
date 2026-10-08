@@ -1,4 +1,5 @@
 import { VOTE_VALUES, type VoteCounts } from "@free-site/shared";
+import { useI18n } from "../../i18n";
 import { VOTE_META, formatShare, totalVotes, verdictOf } from "../../votes";
 
 interface VoteBarProps {
@@ -13,9 +14,10 @@ interface VoteBarProps {
  * @param {VoteBarProps} props
  */
 export function VoteBar({ counts, size = "normal" }: VoteBarProps) {
+  const { t } = useI18n();
   const total = totalVotes(counts);
   const verdict = verdictOf(counts);
-  const summary = VOTE_VALUES.map((value) => `${VOTE_META[value].label} ${counts[value]}`).join(", ");
+  const summary = VOTE_VALUES.map((value) => `${t(VOTE_META[value].labelKey)} ${counts[value]}`).join(", ");
 
   return (
     <div className={`vote-chart vote-chart-${size}`}>
@@ -26,12 +28,12 @@ export function VoteBar({ counts, size = "normal" }: VoteBarProps) {
             style={{ background: verdict?.value ? VOTE_META[verdict.value].color : undefined }}
             aria-hidden="true"
           />
-          {verdict ? verdict.label : "No votes yet"}
+          {verdict ? t(verdict.labelKey) : t("vote.none")}
         </span>
         {verdict && <span className="verdict-share">{formatShare(verdict.share)}</span>}
       </p>
       <div className="vote-bar-group">
-        <div className="vote-bar" role="img" aria-label={total === 0 ? "No votes yet" : summary}>
+        <div className="vote-bar" role="img" aria-label={total === 0 ? t("vote.none") : summary}>
           {total === 0 ? (
             <span className="vote-bar-empty" />
           ) : (
@@ -40,22 +42,22 @@ export function VoteBar({ counts, size = "normal" }: VoteBarProps) {
                 key={value}
                 className="vote-bar-segment"
                 style={{ flexGrow: counts[value], background: VOTE_META[value].color }}
-                title={`${VOTE_META[value].label}: ${counts[value]} (${formatShare(counts[value] / total)})`}
+                title={`${t(VOTE_META[value].labelKey)}: ${counts[value]} (${formatShare(counts[value] / total)})`}
               />
             ))
           )}
         </div>
         {total === 0 ? (
-          <p className="vote-legend muted">Be the first to vote.</p>
+          <p className="vote-legend muted">{t("vote.beFirst")}</p>
         ) : (
           <p className="vote-legend">
             {VOTE_VALUES.map((value) => (
               <span key={value} className="vote-legend-item">
                 <span className="swatch" style={{ background: VOTE_META[value].color }} aria-hidden="true" />
-                {VOTE_META[value].label} {counts[value]}
+                {t(VOTE_META[value].labelKey)} {counts[value]}
               </span>
             ))}
-            <span className="vote-total">{total === 1 ? "1 vote" : `${total} votes`}</span>
+            <span className="vote-total">{t("vote.total", { count: total })}</span>
           </p>
         )}
       </div>

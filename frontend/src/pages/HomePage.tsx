@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import type { CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
-import { apiRequest, errorMessage } from "../api";
+import type { ApiErrorCode, CourseEvent, ModuleOverview, OverviewResponse } from "@free-site/shared";
+import { apiRequest } from "../api";
+import { errorKey, useI18n } from "../i18n";
 import { useCourseEvents } from "../useCourseEvents";
 import { ModuleTile } from "./overview/ModuleTile";
 
 /** Overview of the user's course: every module grouped by semester, with vote shares and vote buttons. */
 export function HomePage() {
+  const { t } = useI18n();
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
-  const [error, setError] = useState("");
+  // The code, not the text, so the message follows a change of language.
+  const [error, setError] = useState<ApiErrorCode | null>(null);
 
   const loadOverview = useCallback(async () => {
     const result = await apiRequest<OverviewResponse>("/api/overview");
-    if (!result.ok) return setError(errorMessage(result.error));
-    setError("");
+    if (!result.ok) return setError(result.error);
+    setError(null);
     setOverview(result.data);
   }, []);
 
@@ -48,26 +51,24 @@ export function HomePage() {
   return (
     <div className="stack-lg">
       <header className="page-intro">
-        <h1>{overview?.course?.name ?? "Your course"}</h1>
-        <p className="muted">Which exams are free? Vote on each module; everyone sees the totals.</p>
+        <h1>{overview?.course?.name ?? t("home.fallbackTitle")}</h1>
+        <p className="muted">{t("home.intro")}</p>
       </header>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(errorKey(error))}</p>}
       {!overview && !error && <OverviewSkeleton />}
       {overview && !overview.course && (
-        <p className="empty-state">You are not in a course yet. Ask an admin to add you to one.</p>
+        <p className="empty-state">{t("home.noCourse")}</p>
       )}
       {overview?.course && overview.modules.length === 0 && (
-        <p className="empty-state">There are no modules in this course yet. An admin adds them.</p>
+        <p className="empty-state">{t("home.noModules")}</p>
       )}
       {semesters.map((semester) => {
         const inSemester = overview!.modules.filter((module) => module.semester === semester);
         return (
           <section key={semester} className="semester" aria-labelledby={`semester-${semester}`}>
             <div className="semester-head">
-              <h2 id={`semester-${semester}`}>Semester {semester}</h2>
-              <span className="semester-count">
-                {inSemester.length === 1 ? "1 module" : `${inSemester.length} modules`}
-              </span>
+              <h2 id={`semester-${semester}`}>{t("common.semester", { number: semester })}</h2>
+              <span className="semester-count">{t("home.moduleCount", { count: inSemester.length })}</span>
             </div>
             <div className="module-grid">
               {inSemester.map((module) => (
@@ -83,8 +84,9 @@ export function HomePage() {
 
 /** Grey placeholders in the shape of module tiles while the overview loads. */
 function OverviewSkeleton() {
+  const { t } = useI18n();
   return (
-    <div className="module-grid" role="status" aria-label="Loading modules">
+    <div className="module-grid" role="status" aria-label={t("home.loadingModules")}>
       {[0, 1, 2].map((index) => (
         <div key={index} className="card module-tile skeleton" aria-hidden="true">
           <span className="skeleton-line skeleton-title" />
