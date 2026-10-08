@@ -11,13 +11,17 @@ interface ModulesSectionProps {
 const SEMESTERS = Array.from({ length: MAX_SEMESTER }, (_, index) => index + 1);
 
 /**
- * Shows the modules of one course grouped by semester and lets admins add and delete them.
+ * The modules of one course grouped by semester, shown inside the course's card. Admins can add,
+ * rename, move to another semester and delete modules.
  * @param {ModulesSectionProps} props
  */
 export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
   const [modules, setModules] = useState<Module[]>([]);
   const [name, setName] = useState("");
   const [semester, setSemester] = useState(1);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSemester, setEditSemester] = useState(1);
   const [error, setError] = useState("");
   const modulesPath = `/api/admin/courses/${course.id}/modules`;
 
@@ -41,6 +45,26 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
     await Promise.all([reloadModules(), onChanged()]);
   }
 
+  /** Starts editing a module with its current values in the fields. */
+  function startEdit(module: Module) {
+    setEditingId(module.id);
+    setEditName(module.name);
+    setEditSemester(module.semester);
+  }
+
+  /** Saves the new name and semester of the edited module. */
+  async function saveEdit(event: FormEvent, module: Module) {
+    event.preventDefault();
+    const result = await apiRequest(`/api/admin/modules/${module.id}`, {
+      method: "PATCH",
+      body: { name: editName, semester: editSemester },
+    });
+    if (!result.ok) return setError(errorMessage(result.error));
+    setError("");
+    setEditingId(null);
+    await Promise.all([reloadModules(), onChanged()]);
+  }
+
   /** Deletes a module after confirmation. */
   async function deleteModule(module: Module) {
     if (!window.confirm(`Delete ${module.name}? Its votes are deleted too.`)) return;
@@ -52,21 +76,48 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
   const usedSemesters = SEMESTERS.filter((number) => modules.some((module) => module.semester === number));
 
   return (
-    <section className="card">
-      <h2>Modules of {course.name}</h2>
-      {modules.length === 0 && <p className="muted">No modules yet.</p>}
+    <div className="modules">
+      {modules.length === 0 && <p className="muted">No modules yet. Add the first one below.</p>}
       {usedSemesters.map((number) => (
-        <div key={number}>
-          <h3>Semester {number}</h3>
+        <div key={number} className="modules-semester">
+          <h4>Semester {number}</h4>
           <ul className="list">
             {modules
               .filter((module) => module.semester === number)
               .map((module) => (
                 <li key={module.id} className="row">
-                  <span>{module.name}</span>
-                  <button type="button" className="danger" onClick={() => deleteModule(module)}>
-                    Delete
-                  </button>
+                  {editingId === module.id ? (
+                    <form className="rename-form" onSubmit={(event) => saveEdit(event, module)}>
+                      <input aria-label="Module name" value={editName} onChange={(event) => setEditName(event.target.value)} required />
+                      <select
+                        aria-label="Semester of this module"
+                        value={editSemester}
+                        onChange={(event) => setEditSemester(Number(event.target.value))}
+                      >
+                        {SEMESTERS.map((option) => (
+                          <option key={option} value={option}>
+                            Semester {option}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit">Save</button>
+                      <button type="button" className="secondary" onClick={() => setEditingId(null)}>
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <span className="module-name">{module.name}</span>
+                      <span className="actions">
+                        <button type="button" className="secondary" onClick={() => startEdit(module)}>
+                          Edit
+                        </button>
+                        <button type="button" className="danger" onClick={() => deleteModule(module)}>
+                          Delete
+                        </button>
+                      </span>
+                    </>
+                  )}
                 </li>
               ))}
           </ul>
@@ -87,6 +138,6 @@ export function ModulesSection({ course, onChanged }: ModulesSectionProps) {
         <button type="submit">Add module</button>
       </form>
       {error && <p role="alert">{error}</p>}
-    </section>
+    </div>
   );
 }

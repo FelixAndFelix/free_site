@@ -41,6 +41,16 @@ function readName(value: unknown): string | null {
 }
 
 /**
+ * Returns the value if it is a whole semester number from 1 to MAX_SEMESTER, otherwise null.
+ * @param {unknown} value
+ */
+function readSemester(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_SEMESTER
+    ? (value as number)
+    : null;
+}
+
+/**
  * Builds the /api/admin router: courses, their modules and user roles. Admins only.
  * @param {AdminDependencies} dependencies
  */
@@ -118,6 +128,24 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     await sendCourse(response, 200, courseId);
   });
 
+  // The join code keeps its old prefix on purpose: renaming must not break links already shared.
+  router.patch("/courses/:courseId", async (request, response) => {
+    const { courseId } = request.params;
+    const name = readName(readBody(request).name);
+    if (!isUuid(courseId)) return sendError(response, 404, "not_found");
+    if (!name) return sendError(response, 400, "invalid_request");
+    try {
+      const updated = await db.update(courses).set({ name }).where(eq(courses.id, courseId)).returning({ id: courses.id });
+      if (updated.length === 0) return sendError(response, 404, "not_found");
+    } catch (error) {
+      if (isUniqueViolation(error)) return sendError(response, 409, "course_exists");
+      throw error;
+    }
+    // Members see the course name in the overview.
+    events.publish(courseId, { type: "modules-changed" });
+    await sendCourse(response, 200, courseId);
+  });
+
   // Only empty courses can be deleted, so no account is removed by accident; modules go with the course.
   router.delete("/courses/:courseId", async (request, response) => {
     const { courseId } = request.params;
@@ -149,14 +177,38 @@ export function createAdminRouter({ db, events, now = () => new Date() }: AdminD
     if (!isUuid(courseId) || !(await findCourse(courseId))) return sendError(response, 404, "not_found");
     const fields = readBody(request);
     const name = readName(fields.name);
-    const semester = fields.semester;
-    const isValidSemester = Number.isInteger(semester) && (semester as number) >= 1 && (semester as number) <= MAX_SEMESTER;
-    if (!name || !isValidSemester) return sendError(response, 400, "invalid_request");
+    const semester = readSemester(fields.semester);
+    if (!name || semester === null) return sendError(response, 400, "invalid_request");
 
-    const [created] = await db.insert(modules).values({ courseId, name, semester: semester as number }).returning();
+    const [created] = await db.insert(modules).values({ courseId, name, semester }).returning();
     events.publish(courseId, { type: "modules-changed" });
     const body: ModuleResponse = { module: created! };
     response.status(201).json(body);
+  });
+
+  // Renames a module and/or moves it to another semester; its votes and history stay with it.
+  router.patch("/modules/:moduleId", async (request, response) => {
+    const { moduleId } = request.params;
+    if (!isUuid(moduleId)) return sendError(response, 404, "not_found");
+    const fields = readBody(request);
+    const changes: { name?: string; semester?: number } = {};
+    if ("name" in fields) {
+      const name = readName(fields.name);
+      if (!name) return sendError(response, 400, "invalid_request");
+      changes.name = name;
+    }
+    if ("semester" in fields) {
+      const semester = readSemester(fields.semester);
+      if (semester === null) return sendError(response, 400, "invalid_request");
+      changes.semester = semester;
+    }
+    if (Object.keys(changes).length === 0) return sendError(response, 400, "invalid_request");
+
+    const [updated] = await db.update(modules).set(changes).where(eq(modules.id, moduleId)).returning();
+    if (!updated) return sendError(response, 404, "not_found");
+    events.publish(updated.courseId, { type: "modules-changed" });
+    const body: ModuleResponse = { module: updated };
+    response.json(body);
   });
 
   router.delete("/modules/:moduleId", async (request, response) => {

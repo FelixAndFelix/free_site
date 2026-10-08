@@ -95,6 +95,32 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
     });
   });
 
+  describe("renaming courses", () => {
+    it("renames a course but keeps its join code", async () => {
+      const course = await createCourse("INF24B");
+
+      const response = await request(app).patch(`/api/admin/courses/${course.id}`).set("Cookie", adminCookie).send({ name: "INF24B (neu)" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.course).toMatchObject({ name: "INF24B (neu)", joinCode: course.joinCode });
+    });
+
+    it("refuses a name that is taken, empty, or for an unknown course", async () => {
+      const course = await createCourse("INF24B");
+      await createCourse("INF25A");
+      const path = `/api/admin/courses/${course.id}`;
+
+      await request(app).patch(path).set("Cookie", adminCookie).send({ name: "INF25A" }).expect(409);
+      await request(app).patch(path).set("Cookie", adminCookie).send({ name: "" }).expect(400);
+      await request(app).patch("/api/admin/courses/nope").set("Cookie", adminCookie).send({ name: "X" }).expect(404);
+      await request(app)
+        .patch("/api/admin/courses/00000000-0000-4000-8000-000000000000")
+        .set("Cookie", adminCookie)
+        .send({ name: "X" })
+        .expect(404);
+    });
+  });
+
   describe("deleting courses", () => {
     it("deletes an empty course together with its modules", async () => {
       const course = await createCourse("INF24B");
@@ -191,6 +217,45 @@ describe.skipIf(!process.env.DATABASE_URL)("admin routes (real Postgres)", () =>
 
       await request(app).post(path).set("Cookie", adminCookie).send({ name: "Too late", semester: 7 }).expect(400);
       await request(app).post(path).set("Cookie", adminCookie).send({ name: "Not a number", semester: "2" }).expect(400);
+    });
+
+    it("renames a module and moves it to another semester, keeping its votes", async () => {
+      // The admin votes, so the module belongs to the admin's own course.
+      const listed = await request(app).get("/api/admin/courses").set("Cookie", adminCookie);
+      const course = listed.body.courses.find((entry: { name: string }) => entry.name === "WWI 2024");
+      const created = await request(app)
+        .post(`/api/admin/courses/${course.id}/modules`)
+        .set("Cookie", adminCookie)
+        .send({ name: "Datenbanke", semester: 3 });
+      const path = `/api/admin/modules/${created.body.module.id}`;
+      await request(app).put(`/api/modules/${created.body.module.id}/vote`).set("Cookie", adminCookie).send({ value: "free" });
+
+      const renamed = await request(app).patch(path).set("Cookie", adminCookie).send({ name: "Datenbanken" }).expect(200);
+      expect(renamed.body.module).toMatchObject({ name: "Datenbanken", semester: 3 });
+      const moved = await request(app).patch(path).set("Cookie", adminCookie).send({ semester: 4 }).expect(200);
+      expect(moved.body.module).toMatchObject({ name: "Datenbanken", semester: 4 });
+
+      const detail = await request(app).get(`/api/modules/${created.body.module.id}`).set("Cookie", adminCookie);
+      expect(detail.body.module).toMatchObject({ semester: 4, counts: { free: 1, possible: 0, impossible: 0 } });
+    });
+
+    it("refuses an empty change, a bad name or semester, and unknown modules", async () => {
+      const course = await createCourse("INF24B");
+      const created = await request(app)
+        .post(`/api/admin/courses/${course.id}/modules`)
+        .set("Cookie", adminCookie)
+        .send({ name: "Datenbanken", semester: 3 });
+      const path = `/api/admin/modules/${created.body.module.id}`;
+
+      await request(app).patch(path).set("Cookie", adminCookie).send({}).expect(400);
+      await request(app).patch(path).set("Cookie", adminCookie).send({ name: "  " }).expect(400);
+      await request(app).patch(path).set("Cookie", adminCookie).send({ semester: 9 }).expect(400);
+      await request(app).patch("/api/admin/modules/not-a-uuid").set("Cookie", adminCookie).send({ name: "X" }).expect(404);
+      await request(app)
+        .patch("/api/admin/modules/00000000-0000-4000-8000-000000000000")
+        .set("Cookie", adminCookie)
+        .send({ name: "X" })
+        .expect(404);
     });
 
     it("deletes a module", async () => {

@@ -152,6 +152,17 @@ export interface CreateModuleRequest {
   semester: number;
 }
 
+/** Body of PATCH /api/admin/modules/:moduleId; at least one field. */
+export interface UpdateModuleRequest {
+  name?: string;
+  semester?: number;
+}
+
+/** Body of PATCH /api/admin/courses/:courseId. */
+export interface RenameCourseRequest {
+  name: string;
+}
+
 /** Body of PUT /api/admin/users/:userId/course; null removes the user from their course. */
 export interface SetUserCourseRequest {
   courseId: string | null;

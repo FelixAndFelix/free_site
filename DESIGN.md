@@ -127,6 +127,17 @@ lists), move down 1px when pressed and never wrap their label. A link that acts 
 (navigation, e.g. "Create account" on the invite page) is an `<a class="button">`, optionally
 `secondary`; real actions stay `<button>`.
 
+### Admin
+
+- **Summary:** one panel with four figures (courses, users, admins, users without a course); the
+  number is large, the label small and muted.
+- **Course card:** name and counts, a rename icon button, the invite link in a sunken row, then
+  actions (copy invite link, manage/hide modules, new join code, delete). "Manage modules" is a toggle
+  (`aria-expanded`) and opens the module list inside the card; several cards can be open.
+- **Module rows:** name with Edit and Delete; Edit swaps the row for name, semester and Save/Cancel.
+- **Users:** a toolbar (search, course filter, admins only), a count line, then a table on tablets
+  and desktops that becomes stacked blocks on phones; 20 rows at a time with "Show more".
+
 ### Forms
 
 Label above the input (`.field`), 2.75rem inputs with a `--line-strong` border, errors below in
