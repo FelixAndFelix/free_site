@@ -33,4 +33,25 @@ describe("buildCodeMail", () => {
     expect(register.html).toContain("Confirm your email address");
     expect(reset.html).not.toContain("Confirm your email address");
   });
+
+  describe("in German", () => {
+    it("writes subject, text and HTML in German", () => {
+      const mail = buildCodeMail({ to: "a@dhbw.example", purpose: "register", code: "042137", appUrl: APP_URL, language: "de" });
+
+      expect(mail.subject).toBe("042137 ist dein free_site-Bestätigungscode");
+      expect(mail.text).toContain("Bestätige deine E-Mail-Adresse");
+      expect(mail.text).toContain("Der Code ist 10 Minuten gültig und kann einmal verwendet werden.");
+      expect(mail.html).toContain('<html lang="de">');
+      expect(mail.html).toContain("Dein Code ist 042137. Er ist 10 Minuten gültig.");
+      expect(mail.html).toContain("Gesendet von");
+      expect(mail.html).not.toContain("Confirm your email address");
+    });
+
+    it("keeps the instance label and uses the reset wording", () => {
+      const mail = buildCodeMail({ to: "a@dhbw.example", purpose: "reset", code: "1", appUrl: APP_URL, instanceLabel: "Development", language: "de" });
+
+      expect(mail.subject).toBe("1 ist dein free_site-Code zum Zurücksetzen des Passworts (Development)");
+      expect(mail.html).toContain("Passwort zurücksetzen");
+    });
+  });
 });

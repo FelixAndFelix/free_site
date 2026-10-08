@@ -10,6 +10,19 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const PASSWORD_MIN_LENGTH = 10;
 export const PASSWORD_MAX_LENGTH = 256;
 
+/** Interface languages. The privacy page stays English only. */
+export const LANGUAGES = ["en", "de"] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = "en";
+
+/**
+ * Narrows a value to a supported language.
+ * @param {unknown} value
+ */
+export function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && (LANGUAGES as readonly string[]).includes(value);
+}
+
 /** The logged-in user as returned by the auth endpoints. */
 export interface AuthUser {
   id: string;
@@ -17,6 +30,8 @@ export interface AuthUser {
   /** Shown instead of the email; null only for accounts that have not chosen one yet. */
   username: string | null;
   role: UserRole;
+  /** The interface language chosen for this account; also the language of its emails. */
+  language: Language;
 }
 
 export const USERNAME_MIN_LENGTH = 3;
@@ -31,6 +46,8 @@ export interface RegisterStartRequest {
   courseCode: string;
   /** Only for the first admin; must match ADMIN_SETUP_CODE while no admin exists. */
   adminSetupCode?: string;
+  /** The language the visitor reads the page in; the code mail is written in it. */
+  language?: Language;
 }
 
 /** Body of POST /api/auth/register/complete. */
@@ -41,6 +58,13 @@ export interface RegisterCompleteRequest {
   code: string;
   password: string;
   adminSetupCode?: string;
+  /** Becomes the language of the new account. */
+  language?: Language;
+}
+
+/** Body of PUT /api/auth/language. */
+export interface SetLanguageRequest {
+  language: Language;
 }
 
 /** Body of PUT /api/auth/username. */
@@ -67,6 +91,8 @@ export interface LoginRequest {
 /** Body of POST /api/auth/reset/start. */
 export interface ResetStartRequest {
   email: string;
+  /** The language the visitor reads the page in; the code mail is written in it. */
+  language?: Language;
 }
 
 /** Body of POST /api/auth/reset/complete. */

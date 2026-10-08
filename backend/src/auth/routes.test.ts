@@ -136,6 +136,75 @@ describe.skipIf(!process.env.DATABASE_URL)("auth routes (real Postgres)", () => 
     });
   });
 
+  describe("interface language", () => {
+    /** Starts and completes a registration with the given language field (omitted when undefined). */
+    async function registerWithLanguage(language?: unknown) {
+      await request(app)
+        .post("/api/auth/register/start")
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, language })
+        .expect(202);
+      const response = await request(app)
+        .post("/api/auth/register/complete")
+        .send({ email: EMAIL, username: "student", courseCode: COURSE_CODE, code: lastCode(), password: PASSWORD, language })
+        .expect(201);
+      return { cookie: sessionCookie(response), user: response.body.user };
+    }
+
+    it("defaults to English", async () => {
+      const { user } = await registerWithLanguage();
+
+      expect(user.language).toBe("en");
+      expect(sentMails.at(-1)!.subject).toContain("is your free_site verification code");
+    });
+
+    it("stores the language chosen at registration and writes the code mail in it", async () => {
+      const { cookie, user } = await registerWithLanguage("de");
+
+      expect(user.language).toBe("de");
+      expect(sentMails.at(-1)!.subject).toContain("ist dein free_site-Bestätigungscode");
+      expect(sentMails.at(-1)!.text).toContain("Bestätige deine E-Mail-Adresse");
+      const me = await request(app).get("/api/auth/me").set("Cookie", cookie);
+      expect(me.body.user.language).toBe("de");
+    });
+
+    it("treats an unsupported language as English", async () => {
+      const { user } = await registerWithLanguage("fr");
+
+      expect(user.language).toBe("en");
+    });
+
+    it("changes the language of the account and keeps it across logins", async () => {
+      const cookie = await register();
+
+      const changed = await request(app).put("/api/auth/language").set("Cookie", cookie).send({ language: "de" });
+      expect(changed.status).toBe(200);
+      expect(changed.body.user.language).toBe("de");
+
+      const login = await request(app).post("/api/auth/login").send({ email: EMAIL, password: PASSWORD });
+      expect(login.body.user.language).toBe("de");
+    });
+
+    it("requires a session and a supported language", async () => {
+      await request(app).put("/api/auth/language").send({ language: "de" }).expect(401);
+      const cookie = await register();
+
+      await request(app).put("/api/auth/language").set("Cookie", cookie).send({ language: "fr" }).expect(400);
+      await request(app).put("/api/auth/language").set("Cookie", cookie).send({}).expect(400);
+    });
+
+    it("writes the reset mail in the language the visitor reads, else in the account's", async () => {
+      const cookie = await register();
+      await request(app).put("/api/auth/language").set("Cookie", cookie).send({ language: "de" });
+
+      await request(app).post("/api/auth/reset/start").send({ email: EMAIL }).expect(202);
+      expect(sentMails.at(-1)!.subject).toContain("ist dein free_site-Code zum Zurücksetzen des Passworts");
+
+      time += 61_000;
+      await request(app).post("/api/auth/reset/start").send({ email: EMAIL, language: "en" }).expect(202);
+      expect(sentMails.at(-1)!.subject).toContain("is your free_site password reset code");
+    });
+  });
+
   describe("abuse limits", () => {
     it("sends at most 5 codes per address per hour, even from many IPs, with an unchanged answer", async () => {
       /** Requests a registration code for the default address from a given client IP. */
