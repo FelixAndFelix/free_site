@@ -98,6 +98,23 @@ export const votes = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("votes_module_id_idx").on(table.moduleId)],
 );
 
+// A student's own grade for a module, in tenths (10 = 1.0, 50 = 5.0), entered after voting ended.
+// Linked to user_id and deleted with the account; others only ever see an average over many grades.
+export const grades = pgTable(
+  "grades",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => modules.id, { onDelete: "cascade" }),
+    tenths: integer("grade_tenths").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.moduleId] }), index("grades_module_id_idx").on(table.moduleId)],
+);
+
 // Append-only history of vote changes for the graphs over time. It stores no user id, so the
 // history cannot be linked to a person and stays intact when an account is deleted.
 // fromValue null = a new vote, toValue null = a withdrawn vote.

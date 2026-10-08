@@ -1492,3 +1492,39 @@ details[open] summary {
   justify-content: space-between;
   gap: var(--space-2, 0.5rem);
 }
+
+.grade-box {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.grade-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.grade-form .field {
+  flex: 1 1 8rem;
+}
+
+.past-modules {
+  display: grid;
+  gap: 1rem;
+}
+
+.past-modules > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.past-modules > summary h2 {
+  display: inline;
+}

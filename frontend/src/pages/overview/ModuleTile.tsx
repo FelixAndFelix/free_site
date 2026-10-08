@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { CaretRight } from "@phosphor-icons/react";
 import type { ModuleOverview } from "@free-site/shared";
 import { VoteBar } from "./VoteBar";
+import { GradeBox } from "./GradeBox";
 import { VoteButtons } from "./VoteButtons";
 
 interface ModuleTileProps {
@@ -24,6 +25,7 @@ export function ModuleTile({ module, onChange }: ModuleTileProps) {
       </h3>
       <VoteBar counts={module.counts} />
       <VoteButtons module={module} onChange={onChange} />
+      {module.votingClosed && <GradeBox module={module} onChange={onChange} />}
     </article>
   );
 }

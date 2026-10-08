@@ -29,6 +29,32 @@ test.describe("a student", () => {
     await expect(page.getByRole("table")).toContainText("1");
   });
 
+  test("votes, sees the semester closed by the admin and enters a grade", async ({ page, adminApi }) => {
+    const course = await createCourse(adminApi, "Semester end");
+    await registerViaInvite(page, course.joinCode, newUser("greta"));
+    const tile = tileOf(page, course.moduleName);
+    await tile.getByRole("button", { name: "Possible", exact: true }).click();
+    await expect(tile.getByText("Mostly possible")).toBeVisible();
+
+    const closed = await adminApi.post(`/api/admin/courses/${course.id}/close-semester`, { data: { semester: 3 } });
+    expect(closed.ok()).toBeTruthy();
+    await page.reload();
+
+    // The module moved to the collapsed list and its verdict is frozen.
+    await page.getByText("Past modules").click();
+    await expect(tile.getByText(/Voting ended on .*The result is final\./)).toBeVisible();
+    await expect(tile.getByRole("button", { name: "Impossible", exact: true })).toBeDisabled();
+    await expect(tile.getByText("Mostly possible")).toBeVisible();
+
+    await tile.getByLabel(/Your grade/).fill("2.3");
+    await tile.getByRole("button", { name: "Save grade" }).click();
+    await expect(tile.getByRole("button", { name: "Remove grade" })).toBeVisible();
+    await expect(tile.getByText(/appears once 5 classmates/)).toBeVisible();
+    await page.reload();
+    await page.getByText("Past modules").click();
+    await expect(tile.getByLabel(/Your grade/)).toHaveValue("2.3");
+  });
+
   test("sees a clear message for an invite link that is not valid", async ({ page }) => {
     await page.goto("/join/NOT-A-REAL-CODE");
 
