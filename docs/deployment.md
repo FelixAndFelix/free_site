@@ -54,7 +54,7 @@ Traffic path: your reverse proxy -> `FRONTEND_BIND` (an internal LAN address:por
    ADMIN_SETUP_CODE=<different long random>
    INSTANCE_LABEL=Development
    ```
-   `INSTANCE_LABEL` shows a "Development instance" banner on every page and appends "(Development)" to mail subjects, so the dev instance is never mistaken for production. Leave it unset in production.
+   `INSTANCE_LABEL` shows a "Development instance" banner on every page and appends "(Development)" to mail subjects, so the dev instance is never mistaken for production. Leave it unset in production. The label is also baked into the web app manifest and the icons at build time, so a dev app installed on a phone gets its own name ("free_site (Development)") and blue icon.
 2. **GitHub: secret.** Add a repository secret `DEV_ENV_FILE_PATH` with the absolute path of that file. Without it, deploys of `develop` fail with a message naming the missing secret.
 3. **Reverse proxy.** Route `free-dev.felixkarg.de` to the dev `FRONTEND_BIND` (second router in `deploy/traefik-free-site.yml`).
 4. **DNS / tunnel.** Expose `free-dev.felixkarg.de` like the other apps. Use this one-level name rather than `dev.free.felixkarg.de`: Cloudflare's free certificate covers `*.felixkarg.de` only, not a second level.
