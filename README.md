@@ -11,6 +11,7 @@ Live at [free.felixkarg.de](https://free.felixkarg.de).
 - [`planning/DevelopingRules.md`](planning/DevelopingRules.md) — commit, branching and code-style conventions
 - [`DESIGN.md`](DESIGN.md) — the visual design system: tokens, type, components and rules for new screens
 - [`docs/deployment.md`](docs/deployment.md) — one-time production deploy setup
+- [`docs/backups.md`](docs/backups.md) — database backups, off-site copies and how to restore
 
 Privacy information for users is on [free.felixkarg.de/privacy](https://free.felixkarg.de/privacy); security reports go to the contact in [`security.txt`](https://free.felixkarg.de/.well-known/security.txt).
 

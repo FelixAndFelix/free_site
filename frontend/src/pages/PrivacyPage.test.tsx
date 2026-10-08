@@ -47,6 +47,7 @@ describe("PrivacyPage", () => {
       "Session cookie",
       "Email codes",
       "IP address",
+      "Database backups",
     ]);
   });
 

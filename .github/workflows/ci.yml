@@ -39,3 +39,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The backup scripts run in the same image as in production, against the service database.
+      - name: Test backup scripts
+        run: >
+          docker run --rm --network host
+          -e PGHOST=localhost -e PGUSER=free_site -e PGPASSWORD=ci
+          -v "$PWD/deploy/backup:/scripts:ro"
+          postgres:17-alpine sh /scripts/test.sh
