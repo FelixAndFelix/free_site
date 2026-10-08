@@ -123,7 +123,9 @@ lock icon note says when voting is possible again. Under 360px the swatches and 
 
 Primary: ink fill, `--on-ink` text. Secondary: surface with `--line-strong` border. Danger: surface
 with danger text and border, tinted on hover. All are at least 2.75rem high (2.5rem in dense admin
-lists), move down 1px when pressed and never wrap their label.
+lists), move down 1px when pressed and never wrap their label. A link that acts like a button
+(navigation, e.g. "Create account" on the invite page) is an `<a class="button">`, optionally
+`secondary`; real actions stay `<button>`.
 
 ### Forms
 

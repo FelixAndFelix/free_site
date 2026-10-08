@@ -101,6 +101,7 @@ export type ApiErrorCode =
   | "course_not_empty"
   | "vote_cooldown"
   | "last_admin"
+  | "already_in_course"
   | "internal_error";
 
 /** Body of every error response. */
@@ -242,3 +243,24 @@ export interface ModuleDetailResponse {
 export type CourseEvent =
   | { type: "module-votes"; moduleId: string; counts: VoteCounts }
   | { type: "modules-changed" };
+
+/**
+ * Response body of GET /api/join/:code, the public look-up behind an invite link.
+ * membership is only present for logged-in users: "none" (no course yet), "same" (already a
+ * member) or "other" (in a different course; currentCourseName says which).
+ */
+export interface JoinInfoResponse {
+  course: { name: string };
+  membership?: "none" | "same" | "other";
+  currentCourseName?: string;
+}
+
+/** Body of POST /api/join/:code; confirmSwitch is required to leave another course. */
+export interface JoinRequest {
+  confirmSwitch?: boolean;
+}
+
+/** Response body of POST /api/join/:code: the course the user is now in. */
+export interface JoinResponse {
+  course: { id: string; name: string };
+}

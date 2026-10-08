@@ -80,6 +80,28 @@ describe("AdminPage", () => {
     expect(window.confirm).toHaveBeenCalled();
   });
 
+  it("copies the invite link of a course", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    mockAdminApi();
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy invite link" }));
+
+    expect(await screen.findByRole("button", { name: "Link copied" })).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/join/INF24B-7KQ2XMPA`);
+  });
+
+  it("shows the link when the clipboard is not available", async () => {
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    mockAdminApi();
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy invite link" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("/join/INF24B-7KQ2XMPA");
+  });
+
   it("shows the modules of a course grouped by semester and adds one", async () => {
     const fetchMock = mockAdminApi({
       "POST /api/admin/courses/c1/modules": { status: 201, body: { module: MODULES[0] } },

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import request from "supertest";
 import { createAdminRouter } from "./admin/routes";
 import { createApp } from "./app";
+import { createJoinRouter } from "./join/routes";
 import { createAuthRouter } from "./auth/routes";
 import type { Db } from "./database";
 import type { Mail } from "./mail";
@@ -48,8 +49,16 @@ export function createTestApp({
     now,
   });
   const adminRouter = createAdminRouter({ db, events, now });
+  const joinRouter = createJoinRouter({ db, events, now });
   const votingRouter = createVotingRouter({ db, events, now });
-  return createApp({ checkDatabase: async () => true, authRouter, adminRouter, votingRouter, trustProxy: "loopback" });
+  return createApp({
+    checkDatabase: async () => true,
+    authRouter,
+    adminRouter,
+    joinRouter,
+    votingRouter,
+    trustProxy: "loopback",
+  });
 }
 
 /**

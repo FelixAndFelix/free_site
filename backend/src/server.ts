@@ -5,6 +5,7 @@ import { createAuthRouter } from "./auth/routes";
 import { loadConfig } from "./config";
 import { ensureCourse } from "./courses";
 import { createDatabase } from "./database";
+import { createJoinRouter } from "./join/routes";
 import { createSendMail } from "./mail";
 import { createEventHub } from "./voting/events";
 import { createVotingRouter } from "./voting/routes";
@@ -52,6 +53,7 @@ createApp({
   checkDatabase: database.check,
   authRouter,
   adminRouter: createAdminRouter({ db: database.db, events }),
+  joinRouter: createJoinRouter({ db: database.db, events }),
   votingRouter: createVotingRouter({ db: database.db, events }),
   trustProxy: config.trustProxy,
 }).listen(config.port, () => {
