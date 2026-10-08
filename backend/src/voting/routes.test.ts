@@ -196,4 +196,86 @@ describe.skipIf(!process.env.DATABASE_URL)("voting routes (real Postgres)", () =
     const rows = await database.db.query.votes.findMany();
     expect(rows).toHaveLength(0);
   });
+  describe("voting deadline", () => {
+    /** Sets the deadline of a module as admin. */
+    function setDeadline(moduleId: string, votingEndsAt: string | null) {
+      return request(app).patch(`/api/admin/modules/${moduleId}`).set("Cookie", adminCookie).send({ votingEndsAt });
+    }
+
+    it("keeps voting open before the deadline and shows it in the overview", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await setDeadline(moduleId, "2026-10-02T10:00:00Z").expect(200);
+
+      await vote(studentCookie, moduleId, "free").expect(200);
+
+      const overview = await request(app).get("/api/overview").set("Cookie", studentCookie).expect(200);
+      expect(overview.body.modules[0]).toMatchObject({ votingEndsAt: "2026-10-02T10:00:00.000Z", votingClosed: false });
+    });
+
+    it("rejects setting, changing and withdrawing a vote after the deadline and keeps the verdict", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await vote(studentCookie, moduleId, "free").expect(200);
+      await setDeadline(moduleId, "2026-10-01T10:00:00Z").expect(200);
+
+      const closedVote = await vote(studentCookie, moduleId, "impossible").expect(409);
+      expect(closedVote.body.error).toBe("voting_closed");
+      await request(app).delete(`/api/modules/${moduleId}/vote`).set("Cookie", studentCookie).expect(409);
+      // Not even admins can change a frozen verdict.
+      await vote(adminCookie, moduleId, "free").expect(409);
+
+      const overview = await request(app).get("/api/overview").set("Cookie", studentCookie).expect(200);
+      expect(overview.body.modules[0]).toMatchObject({ votingClosed: true, counts: { free: 1, possible: 0, impossible: 0 }, myVote: "free" });
+    });
+
+    it("closes by itself when the time passes and reopens when the deadline is removed", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await setDeadline(moduleId, "2026-10-01T10:30:00Z").expect(200);
+      await vote(studentCookie, moduleId, "free").expect(200);
+
+      time += 31 * 60_000;
+      await vote(studentCookie, moduleId, "possible").expect(409);
+
+      await setDeadline(moduleId, null).expect(200);
+      await vote(studentCookie, moduleId, "possible").expect(200);
+    });
+
+    it("closes all open modules of one semester at once", async () => {
+      const first = await createModule("Analysis", 1);
+      const second = await createModule("Algebra", 1);
+      const other = await createModule("Databases", 2);
+
+      const closed = await request(app)
+        .post(`/api/admin/courses/${courseId}/close-semester`)
+        .set("Cookie", adminCookie)
+        .send({ semester: 1 })
+        .expect(200);
+
+      expect(closed.body).toEqual({ closed: 2 });
+      await vote(studentCookie, first, "free").expect(409);
+      await vote(studentCookie, second, "free").expect(409);
+      await vote(studentCookie, other, "free").expect(200);
+      // A second click closes nothing new.
+      const again = await request(app)
+        .post(`/api/admin/courses/${courseId}/close-semester`)
+        .set("Cookie", adminCookie)
+        .send({ semester: 1 })
+        .expect(200);
+      expect(again.body).toEqual({ closed: 0 });
+    });
+
+    it("validates deadlines and lets only admins close a semester", async () => {
+      const moduleId = await createModule("Analysis", 1);
+      await setDeadline(moduleId, "not a date").expect(400);
+      await request(app)
+        .post(`/api/admin/courses/${courseId}/close-semester`)
+        .set("Cookie", adminCookie)
+        .send({ semester: 99 })
+        .expect(400);
+      await request(app)
+        .post(`/api/admin/courses/${courseId}/close-semester`)
+        .set("Cookie", studentCookie)
+        .send({ semester: 1 })
+        .expect(403);
+    });
+  });
 });

@@ -57,6 +57,13 @@
       "when": 1791448544895,
       "tag": "0007_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791450834758,
+      "tag": "0008_voting_deadline",
+      "breakpoints": true
     }
   ]
 }

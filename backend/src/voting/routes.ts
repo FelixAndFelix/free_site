@@ -63,6 +63,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
         id: modules.id,
         name: modules.name,
         semester: modules.semester,
+        votingEndsAt: modules.votingEndsAt,
         free: countOf("free"),
         possible: countOf("possible"),
         impossible: countOf("impossible"),
@@ -76,8 +77,10 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
       .groupBy(modules.id)
       .orderBy(asc(modules.semester), asc(modules.name));
     const time = now();
-    return rows.map(({ free, possible, impossible, myUpdatedAt, ...module }) => ({
+    return rows.map(({ free, possible, impossible, myUpdatedAt, votingEndsAt, ...module }) => ({
       ...module,
+      votingEndsAt: votingEndsAt?.toISOString() ?? null,
+      votingClosed: !!votingEndsAt && votingEndsAt <= time,
       counts: { free, possible, impossible },
       canChangeAt: isExemptFromCooldown(user)
         ? null
@@ -143,6 +146,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
     if (!VOTE_VALUES.includes(value as VoteValue)) return sendError(response, 400, "invalid_request");
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
+    if (target.module.votingClosed) return sendError(response, 409, "voting_closed");
 
     const result = await changeVote(db, {
       userId: target.user.id,
@@ -158,6 +162,7 @@ export function createVotingRouter({ db, events, now = () => new Date() }: Votin
   router.delete("/modules/:moduleId/vote", async (request, response) => {
     const target = await findVotableModule(response, request.params.moduleId);
     if (!target) return sendError(response, 404, "not_found");
+    if (target.module.votingClosed) return sendError(response, 409, "voting_closed");
 
     const result = await changeVote(db, {
       userId: target.user.id,

@@ -85,7 +85,7 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
               className={selected ? "vote-button selected" : "vote-button"}
               style={selected ? { background: VOTE_META[value].tint, borderColor: VOTE_META[value].color } : undefined}
               aria-pressed={selected}
-              disabled={saving || lockedUntil !== null}
+              disabled={saving || lockedUntil !== null || module.votingClosed}
               onClick={() => castVote(value)}
             >
               {selected ? (
@@ -98,7 +98,17 @@ export function VoteButtons({ module, onChange }: VoteButtonsProps) {
           );
         })}
       </div>
-      {lockedUntil && (
+      {module.votingEndsAt && (
+        <p className="vote-cooldown">
+          <LockSimple aria-hidden="true" />
+          <span>
+            {t(module.votingClosed ? "vote.closed" : "vote.closesOn", {
+              date: new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(module.votingEndsAt)),
+            })}
+          </span>
+        </p>
+      )}
+      {lockedUntil && !module.votingClosed && (
         <p className="vote-cooldown">
           <LockSimple aria-hidden="true" />
           <span>
