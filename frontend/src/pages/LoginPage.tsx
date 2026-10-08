@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import type { UserResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../api";
 import { useAuth } from "../auth";
@@ -9,6 +9,8 @@ import { Field } from "../Field";
 export function LoginPage() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
+  // Set when the visitor came from an invite link: after logging in they continue there.
+  const joinCode = useSearchParams()[0].get("join");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -19,7 +21,7 @@ export function LoginPage() {
     const result = await apiRequest<UserResponse>("/api/auth/login", { body: { email, password } });
     if (!result.ok) return setError(errorMessage(result.error));
     setUser(result.data.user);
-    navigate("/");
+    navigate(joinCode ? `/join/${encodeURIComponent(joinCode)}` : "/");
   }
 
   return (
@@ -30,7 +32,7 @@ export function LoginPage() {
       {error && <p role="alert">{error}</p>}
       <button type="submit">Log in</button>
       <p>
-        <Link to="/register">Create an account</Link> · <Link to="/reset">Forgot password?</Link>
+        <Link to={joinCode ? `/register?join=${encodeURIComponent(joinCode)}` : "/register"}>Create an account</Link> · <Link to="/reset">Forgot password?</Link>
       </p>
     </form>
   );

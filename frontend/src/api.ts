@@ -21,6 +21,7 @@ const ERROR_MESSAGES: Record<ApiErrorCode, string> = {
   cannot_change_own_role: "You cannot change your own role.",
   course_not_empty: "This course still has members. Move or remove them first.",
   vote_cooldown: "You changed this vote recently. Please wait a moment.",
+  already_in_course: "You are already in another course. Confirm the switch to continue.",
   last_admin: "You are the only admin. Make someone else admin first, then delete your account.",
   internal_error: "Something went wrong on our side. Please try again later.",
 };

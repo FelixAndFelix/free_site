@@ -17,6 +17,7 @@ interface CoursesSectionProps {
 export function CoursesSection({ courses, selectedCourseId, onSelect, onChanged }: CoursesSectionProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [copiedCourseId, setCopiedCourseId] = useState<string | null>(null);
 
   /** Creates a course and selects it. */
   async function createCourse(event: FormEvent) {
@@ -38,9 +39,21 @@ export function CoursesSection({ courses, selectedCourseId, onSelect, onChanged 
     await onChanged();
   }
 
+  /** Copies the invite link of a course (this site's address plus the join code) to the clipboard. */
+  async function copyInviteLink(course: AdminCourse) {
+    const link = `${window.location.origin}/join/${course.joinCode}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setError("");
+      setCopiedCourseId(course.id);
+    } catch {
+      setError(`Copying is not possible here. The invite link is ${link}`);
+    }
+  }
+
   /** Replaces the join code of a course after confirmation. */
   async function rotateJoinCode(course: AdminCourse) {
-    if (!window.confirm(`Replace the join code of ${course.name}? The old code stops working immediately.`)) return;
+    if (!window.confirm(`Replace the join code of ${course.name}? The old code and invite link stop working immediately.`)) return;
     const result = await apiRequest(`/api/admin/courses/${course.id}/join-code`, { method: "POST" });
     if (!result.ok) return setError(errorMessage(result.error));
     await onChanged();
@@ -65,6 +78,9 @@ export function CoursesSection({ courses, selectedCourseId, onSelect, onChanged 
             <div className="actions">
               <button type="button" className="secondary" onClick={() => onSelect(course.id)}>
                 Manage modules
+              </button>
+              <button type="button" className="secondary" onClick={() => copyInviteLink(course)}>
+                {copiedCourseId === course.id ? "Link copied" : "Copy invite link"}
               </button>
               <button type="button" className="secondary" onClick={() => rotateJoinCode(course)}>
                 New join code

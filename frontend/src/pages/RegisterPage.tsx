@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { PASSWORD_MIN_LENGTH, type UserResponse } from "@free-site/shared";
 import { apiRequest, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Field } from "../Field";
+import { useJoinInfo } from "../useJoinInfo";
 import { USERNAME_HINT } from "./UsernamePage";
 
 /** Two-step registration: email and course code, then emailed code and password. */
@@ -13,7 +14,10 @@ export function RegisterPage() {
   const [step, setStep] = useState<"details" | "verify">("details");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [courseCode, setCourseCode] = useState("");
+  // Set when the visitor came from an invite link: the course is known, so it is not asked for again.
+  const joinCode = useSearchParams()[0].get("join");
+  const invite = useJoinInfo(joinCode);
+  const [courseCode, setCourseCode] = useState(joinCode ?? "");
   const [adminSetupCode, setAdminSetupCode] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +50,22 @@ export function RegisterPage() {
         <Field label="DHBW email" type="email" autoComplete="email" value={email} onValue={setEmail} />
         <Field label="Username" autoComplete="username" value={username} onValue={setUsername} />
         <p className="muted">{USERNAME_HINT}</p>
-        <Field label="Course code" placeholder="INF24B-7KQ2XMPA" value={courseCode} onValue={setCourseCode} />
+        {invite.status === "ready" ? (
+          <p>
+            You are joining <strong>{invite.info.course.name}</strong>.
+          </p>
+        ) : invite.status === "loading" ? (
+          <p className="muted" role="status">
+            Checking your invite link…
+          </p>
+        ) : (
+          <>
+            {invite.status === "failed" && (
+              <p role="alert">This invite link is not valid. Enter a course code instead, or ask for a new link.</p>
+            )}
+            <Field label="Course code" placeholder="INF24B-7KQ2XMPA" value={courseCode} onValue={setCourseCode} />
+          </>
+        )}
         <details>
           <summary>I have an admin setup code</summary>
           <Field label="Admin setup code" required={false} value={adminSetupCode} onValue={setAdminSetupCode} />
@@ -57,7 +76,7 @@ export function RegisterPage() {
         </p>
         <button type="submit">Send code</button>
         <p>
-          <Link to="/login">I already have an account</Link>
+          <Link to={joinCode ? `/login?join=${encodeURIComponent(joinCode)}` : "/login"}>I already have an account</Link>
         </p>
       </form>
     );
