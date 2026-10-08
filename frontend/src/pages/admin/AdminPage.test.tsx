@@ -40,22 +40,24 @@ describe("AdminPage", () => {
     expect(await findLoggedInAs("felix")).toBeInTheDocument();
   });
 
-  it("shows the courses with their join codes", async () => {
+  it("shows the courses with their counts but not the invite link itself", async () => {
     mockAdminApi();
     renderAt("/admin");
-    expect(await screen.findByText("INF24B-7KQ2XMPA")).toBeInTheDocument();
-    expect(screen.getByText(/12 members · 2 modules/)).toBeInTheDocument();
+    expect(await screen.findByText("12 members, 2 modules")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy invite link" })).toBeInTheDocument();
+    expect(screen.queryByText(/INF24B-7KQ2XMPA/)).not.toBeInTheDocument();
   });
 
   it("creates a course", async () => {
     const fetchMock = mockAdminApi({ "POST /api/admin/courses": { status: 201, body: { course: COURSE } } });
     renderAt("/admin");
 
-    await screen.findByText("INF24B-7KQ2XMPA");
-    type(/New course/, "INF25A");
+    await screen.findByRole("heading", { name: "INF24B" });
+    type(/Course name/, "INF25A");
     fireEvent.click(screen.getByRole("button", { name: "Create course" }));
 
-    expect(await screen.findByRole("heading", { name: "Modules of INF24B" })).toBeInTheDocument();
+    // The new course opens its module list right away, so modules can be added without another click.
+    expect(await screen.findByRole("button", { name: "Hide modules" })).toBeInTheDocument();
     expect(sentBodies(fetchMock, "POST", "/api/admin/courses")).toEqual([{ name: "INF25A" }]);
   });
 
@@ -63,8 +65,8 @@ describe("AdminPage", () => {
     mockAdminApi({ "POST /api/admin/courses": { status: 409, body: { error: "course_exists" } } });
     renderAt("/admin");
 
-    await screen.findByText("INF24B-7KQ2XMPA");
-    type(/New course/, "INF24B");
+    await screen.findByRole("heading", { name: "INF24B" });
+    type(/Course name/, "INF24B");
     fireEvent.click(screen.getByRole("button", { name: "Create course" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("A course with this name already exists.");
@@ -100,6 +102,94 @@ describe("AdminPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy invite link" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("/join/INF24B-7KQ2XMPA");
+  });
+
+  it("shows numbers at a glance", async () => {
+    mockAdminApi({
+      "GET /api/admin/users": {
+        status: 200,
+        body: { users: [...USERS, { id: "u2", email: "new@dhbw.example", username: "new", role: "user", courseId: null, courseName: null }] },
+      },
+    });
+    renderAt("/admin");
+
+    const summary = (await screen.findByText("Without a course")).closest("dl")!;
+    expect(summary).toHaveTextContent("Course1");
+    expect(summary).toHaveTextContent("Users3");
+    expect(summary).toHaveTextContent("Admin1");
+    expect(summary).toHaveTextContent("Without a course1");
+  });
+
+  it("opens and closes the modules of a course with the same button", async () => {
+    mockAdminApi();
+    renderAt("/admin");
+
+    const toggle = await screen.findByRole("button", { name: "Manage modules" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(await screen.findByText("Datenbanken")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide modules" })).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide modules" }));
+    expect(screen.queryByText("Datenbanken")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Manage modules" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps several courses open at once", async () => {
+    const other = { ...COURSE, id: "c2", name: "INF25A", joinCode: "INF25A-AAAAAAAA", memberCount: 0, moduleCount: 0 };
+    mockAdminApi({
+      "GET /api/admin/courses": { status: 200, body: { courses: [COURSE, other] } },
+      "GET /api/admin/courses/c2/modules": { status: 200, body: { modules: [] } },
+    });
+    renderAt("/admin");
+
+    const buttons = await screen.findAllByRole("button", { name: "Manage modules" });
+    fireEvent.click(buttons[0]!);
+    fireEvent.click(buttons[1]!);
+
+    expect(await screen.findByText("Datenbanken")).toBeInTheDocument();
+    expect(await screen.findByText(/No modules yet/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Hide modules" })).toHaveLength(2);
+  });
+
+  it("renames a course", async () => {
+    const fetchMock = mockAdminApi({ "PATCH /api/admin/courses/c1": { status: 200, body: { course: COURSE } } });
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Rename INF24B" }));
+    fireEvent.change(screen.getByLabelText("Name of INF24B"), { target: { value: "INF24B neu" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() => expect(sentBodies(fetchMock, "PATCH", "/api/admin/courses/c1")).toEqual([{ name: "INF24B neu" }]));
+  });
+
+  it("edits the name and semester of a module", async () => {
+    const fetchMock = mockAdminApi({ "PATCH /api/admin/modules/m2": { status: 200, body: { module: MODULES[1] } } });
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Manage modules" }));
+    const row = (await screen.findByText("Datenbanken")).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("Module name"), { target: { value: "Datenbanksysteme" } });
+    fireEvent.change(screen.getByLabelText("Semester of this module"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() =>
+      expect(sentBodies(fetchMock, "PATCH", "/api/admin/modules/m2")).toEqual([{ name: "Datenbanksysteme", semester: 4 }]),
+    );
+  });
+
+  it("cancels editing a module without saving", async () => {
+    const fetchMock = mockAdminApi();
+    renderAt("/admin");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Manage modules" }));
+    const row = (await screen.findByText("Datenbanken")).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("Datenbanken")).toBeInTheDocument();
+    expect(sentBodies(fetchMock, "PATCH", "/api/admin/modules/m2")).toEqual([]);
   });
 
   it("shows the modules of a course grouped by semester and adds one", async () => {
@@ -142,9 +232,9 @@ describe("AdminPage", () => {
     });
     renderAt("/admin");
 
-    const fullRow = (await screen.findByText("INF24B-7KQ2XMPA")).closest("li")!;
+    const fullRow = (await screen.findByRole("heading", { name: "INF24B" })).closest("li")!;
     expect(within(fullRow).getByRole("button", { name: "Delete" })).toBeDisabled();
-    const emptyRow = screen.getByText("INF25A-AAAAAAAA").closest("li")!;
+    const emptyRow = screen.getByRole("heading", { name: "INF25A" }).closest("li")!;
     fireEvent.click(within(emptyRow).getByRole("button", { name: "Delete" }));
 
     await vi.waitFor(() => expect(sentBodies(fetchMock, "DELETE", "/api/admin/courses/c2")).toHaveLength(1));
@@ -172,10 +262,74 @@ describe("AdminPage", () => {
     const fetchMock = mockAdminApi({ "PATCH /api/admin/users/u1": { status: 200, body: { user: USERS[1] } } });
     renderAt("/admin");
 
-    const ownRow = (await screen.findByText("admin@dhbw.example")).closest("li")!;
+    const ownRow = (await screen.findByText("admin@dhbw.example")).closest("tr")!;
     expect(within(ownRow).queryByRole("button")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Make admin" }));
     await vi.waitFor(() => expect(sentBodies(fetchMock, "PATCH", "/api/admin/users/u1")).toEqual([{ role: "admin" }]));
+  });
+
+  describe("users", () => {
+    const MANY = [
+      ...USERS,
+      { id: "u2", email: "anna@dhbw.example", username: "anna", role: "user", courseId: null, courseName: null },
+      { id: "u3", email: "ben@dhbw.example", username: "ben", role: "user", courseId: "c1", courseName: "INF24B" },
+    ];
+
+    it("searches by username or email", async () => {
+      mockAdminApi({ "GET /api/admin/users": { status: 200, body: { users: MANY } } });
+      renderAt("/admin");
+
+      await screen.findByText("anna@dhbw.example");
+      type(/Search users/, "ANN");
+
+      expect(screen.getByText("anna@dhbw.example")).toBeInTheDocument();
+      expect(screen.queryByText("ben@dhbw.example")).not.toBeInTheDocument();
+      expect(screen.getByRole("status", { name: "" })).toHaveTextContent("1 of 4 users match");
+    });
+
+    it("filters by course, including people without a course, and by role", async () => {
+      mockAdminApi({ "GET /api/admin/users": { status: 200, body: { users: MANY } } });
+      renderAt("/admin");
+
+      await screen.findByText("anna@dhbw.example");
+      fireEvent.change(screen.getByLabelText("Course"), { target: { value: "none" } });
+      expect(screen.getByText("anna@dhbw.example")).toBeInTheDocument();
+      expect(screen.queryByText("ben@dhbw.example")).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("Course"), { target: { value: "" } });
+      fireEvent.click(screen.getByLabelText("Admins only"));
+      expect(screen.getByText("admin@dhbw.example")).toBeInTheDocument();
+      expect(screen.queryByText("student@dhbw.example")).not.toBeInTheDocument();
+    });
+
+    it("says when nothing matches", async () => {
+      mockAdminApi({ "GET /api/admin/users": { status: 200, body: { users: MANY } } });
+      renderAt("/admin");
+
+      await screen.findByText("anna@dhbw.example");
+      type(/Search users/, "nobody");
+
+      expect(screen.getByText(/No users match/)).toBeInTheDocument();
+    });
+
+    it("shows 20 users first and the rest on request", async () => {
+      const many = Array.from({ length: 25 }, (_, index) => ({
+        id: `x${index}`,
+        email: `user${String(index).padStart(2, "0")}@dhbw.example`,
+        username: `user${index}`,
+        role: "user",
+        courseId: "c1",
+        courseName: "INF24B",
+      }));
+      mockAdminApi({ "GET /api/admin/users": { status: 200, body: { users: many } } });
+      renderAt("/admin");
+
+      await screen.findByText("user00@dhbw.example");
+      expect(screen.queryByText("user24@dhbw.example")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Show 5 more" }));
+
+      expect(screen.getByText("user24@dhbw.example")).toBeInTheDocument();
+    });
   });
 });
