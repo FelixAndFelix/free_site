@@ -9,6 +9,7 @@ import {
   type UserResponse,
 } from "@free-site/shared";
 import { createHash, timingSafeEqual } from "node:crypto";
+import type { AuditLog } from "../audit/log";
 import { isUniqueViolation, type Db } from "../database";
 import { readBody, readFields, sendError } from "../http";
 import type { SendMail } from "../mail";
@@ -35,6 +36,8 @@ export interface AuthDependencies {
   appUrl: string;
   instanceLabel?: string;
   adminSetupCode?: string;
+  /** Where sign-ins and account events are recorded. */
+  audit: AuditLog;
   /** Told when an account is deleted, so live viewers of the course reload and streams close. */
   onAccountDeleted?: (userId: string, courseId: string | null) => void;
   now?: () => Date;
@@ -89,6 +92,7 @@ export function createAuthRouter({
   appUrl,
   instanceLabel,
   adminSetupCode,
+  audit,
   onAccountDeleted = () => {},
   now = () => new Date(),
 }: AuthDependencies) {
@@ -224,6 +228,7 @@ export function createAuthRouter({
       throw error;
     }
     await startSession(response, user.id);
+    await audit.record({ category: "access", action: "account.registered", actorUserId: user.id, email, ip: request.ip });
     sendUser(response, 201, user);
   });
 
@@ -239,10 +244,14 @@ export function createAuthRouter({
     if (!(await verifyPassword(user?.passwordHash, fields.password)) || !user) {
       loginThrottle.recordFailure(email);
       failedLoginsPerIp.hit(ip);
+      // The typed address is logged even if no account has it. Only failures that got past the rate
+      // limits are logged, so an attacker cannot fill the log.
+      await audit.record({ category: "access", action: "login.failed", targetUserId: user?.id, email, ip });
       return sendError(response, 401, "invalid_credentials");
     }
     loginThrottle.reset(email);
     await startSession(response, user.id);
+    await audit.record({ category: "access", action: "login.succeeded", actorUserId: user.id, email, ip });
     sendUser(response, 200, user);
   });
 
@@ -285,6 +294,7 @@ export function createAuthRouter({
       return sendError(response, 400, "invalid_setup_code");
     }
     await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+    await audit.record({ category: "access", action: "admin.claimed", actorUserId: user.id, email: user.email, ip: request.ip });
     sendUser(response, 200, { ...user, role: "admin" });
   });
 
@@ -306,6 +316,8 @@ export function createAuthRouter({
     if (await isLastAdmin(db, user.id)) return sendError(response, 409, "last_admin");
 
     const courseId = await deleteAccount(db, { userId: user.id, now: now() });
+    // The account is gone, so no user is linked; the address and email show whose account it was.
+    await audit.record({ category: "access", action: "account.deleted", email: sessionUser.email, ip: request.ip });
     loginThrottle.reset(sessionUser.email);
     onAccountDeleted(user.id, courseId);
     response.clearCookie(SESSION_COOKIE, { path: "/" });
@@ -340,6 +352,8 @@ export function createAuthRouter({
       // A failed send is logged, not returned, so the response never depends on the account existing.
       await sendCodeMail(email, "reset", language).catch((error: unknown) => console.error("reset mail failed", error));
     }
+    // Logged for unknown addresses too (the response is the same either way); bounded by the per-IP limit above.
+    await audit.record({ category: "access", action: "password_reset.requested", targetUserId: account?.id, email, ip: request.ip });
     response.status(202).json({});
   });
 
@@ -357,6 +371,7 @@ export function createAuthRouter({
     await db.update(users).set({ passwordHash: await hashPassword(fields.password) }).where(eq(users.id, user.id));
     await deleteUserSessions(db, user.id);
     loginThrottle.reset(email);
+    await audit.record({ category: "access", action: "password_reset.completed", actorUserId: user.id, email, ip: request.ip });
     response.status(204).end();
   });
 

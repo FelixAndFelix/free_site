@@ -113,11 +113,11 @@ describe.skipIf(!process.env.DATABASE_URL)("accounts (real Postgres)", () => {
       const before = { codes: await database.db.$count(emailCodes), sessions: await database.db.$count(sessions) };
       expect(before).toEqual({ codes: 1, sessions: 2 });
 
-      expect(await deleteExpiredRecords(database.db, new Date(time))).toEqual({ emailCodes: 0, sessions: 0 });
+      expect(await deleteExpiredRecords(database.db, new Date(time))).toEqual({ emailCodes: 0, sessions: 0, auditEntries: 0 });
       const afterCodesExpire = new Date(time + 11 * 60_000);
-      expect(await deleteExpiredRecords(database.db, afterCodesExpire)).toEqual({ emailCodes: 1, sessions: 0 });
+      expect(await deleteExpiredRecords(database.db, afterCodesExpire)).toEqual({ emailCodes: 1, sessions: 0, auditEntries: 0 });
       const afterSessionsExpire = new Date(time + 31 * 24 * 60 * 60_000);
-      expect(await deleteExpiredRecords(database.db, afterSessionsExpire)).toEqual({ emailCodes: 0, sessions: 2 });
+      expect(await deleteExpiredRecords(database.db, afterSessionsExpire)).toEqual({ emailCodes: 0, sessions: 0 + 2, auditEntries: 0 });
     });
   });
 });

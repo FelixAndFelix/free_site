@@ -5,6 +5,7 @@ import { createAuthRouter } from "./auth/routes";
 import { loadConfig } from "./config";
 import { ensureCourse } from "./courses";
 import { createDatabase } from "./database";
+import { createAuditLog } from "./audit/log";
 import { createJoinRouter } from "./join/routes";
 import { createSendMail } from "./mail";
 import { createEventHub } from "./voting/events";
@@ -21,6 +22,7 @@ if (config.initialCourseJoinCode) {
 }
 
 const events = createEventHub();
+const audit = createAuditLog(database.db);
 
 const authRouter = createAuthRouter({
   db: database.db,
@@ -31,6 +33,7 @@ const authRouter = createAuthRouter({
   instanceLabel: config.instanceLabel,
   adminSetupCode: config.adminSetupCode,
   onAccountDeleted: events.userLeftCourse,
+  audit,
 });
 
 // Hourly, and once at start: expired email codes and sessions are removed, not only rejected.
@@ -39,8 +42,10 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 async function cleanUp() {
   try {
     const deleted = await deleteExpiredRecords(database.db, new Date());
-    if (deleted.emailCodes || deleted.sessions) {
-      console.log(`cleanup: deleted ${deleted.emailCodes} expired email codes, ${deleted.sessions} expired sessions`);
+    if (deleted.emailCodes || deleted.sessions || deleted.auditEntries) {
+      console.log(
+        `cleanup: deleted ${deleted.emailCodes} expired email codes, ${deleted.sessions} expired sessions, ${deleted.auditEntries} old log entries`,
+      );
     }
   } catch (error) {
     console.error("cleanup failed", error);
@@ -52,8 +57,8 @@ setInterval(cleanUp, CLEANUP_INTERVAL_MS).unref();
 createApp({
   checkDatabase: database.check,
   authRouter,
-  adminRouter: createAdminRouter({ db: database.db, events }),
-  joinRouter: createJoinRouter({ db: database.db, events }),
+  adminRouter: createAdminRouter({ db: database.db, events, audit }),
+  joinRouter: createJoinRouter({ db: database.db, events, audit }),
   votingRouter: createVotingRouter({ db: database.db, events }),
   trustProxy: config.trustProxy,
 }).listen(config.port, () => {

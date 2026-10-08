@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { USER_ROLES, VOTE_VALUES, type Language } from "@free-site/shared";
+import { AUDIT_CATEGORIES, USER_ROLES, VOTE_VALUES, type AuditAction, type Language } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
 export const voteValue = pgEnum("vote_value", VOTE_VALUES);
+export const auditCategory = pgEnum("audit_category", AUDIT_CATEGORIES);
 export const emailCodePurpose = pgEnum("email_code_purpose", ["register", "reset"]);
 
 // username is nullable only for accounts created before usernames existed; they choose one after login.
@@ -110,4 +111,29 @@ export const voteChanges = pgTable(
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull(),
   },
   (table) => [index("vote_changes_module_id_changed_at_idx").on(table.moduleId, table.changedAt)],
+);
+
+// What admins changed ("audit") and who signed in or out of accounts ("access"). Users are linked with
+// ON DELETE SET NULL, but email and ip are kept as written, so the log still shows who and from where
+// until the retention time ends (see RETENTION_DAYS in audit/log.ts and the privacy page).
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    category: auditCategory("category").notNull(),
+    action: text("action").$type<AuditAction>().notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "set null" }),
+    label: text("label"),
+    // The email address the event is about: the account for access events, the affected user for
+    // admin changes to a user, or the address that was typed for a failed login.
+    email: text("email"),
+    ip: text("ip"),
+  },
+  (table) => [
+    index("audit_log_category_created_idx").on(table.category, table.createdAt),
+    index("audit_log_actor_idx").on(table.actorUserId),
+    index("audit_log_target_idx").on(table.targetUserId),
+  ],
 );
