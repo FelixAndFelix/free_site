@@ -11,6 +11,16 @@ const STORED_DATA = [
   ["Username", "Shown to others instead of your email", "Until you delete your account"],
   ["Password", "Login. Stored only as an Argon2id hash; nobody can read it", "Until you delete your account"],
   ["Course and role", "Which modules you see; admin rights", "Until you delete your account"],
+  [
+    "Language",
+    "Your interface language, which is also the language of the emails we send you",
+    "Until you delete your account",
+  ],
+  [
+    "Language choice in your browser",
+    "Remembers your language on this device before you log in. It stays in your browser and is never sent to us",
+    "Until you clear your browser data",
+  ],
   ["Your votes", "The totals and charts of your course", "Until you delete your account or the module is deleted"],
   [
     "Vote history",
@@ -31,9 +41,9 @@ export function PrivacyPage() {
       <p className="muted">Last updated: {LAST_UPDATED}</p>
 
       <section className="card">
-        <h2>Who runs free_site</h2>
+        <h2>Who runs FreeSite</h2>
         <p>
-          free_site is a private, non-commercial project by a DHBW student. It is not run by or affiliated with the
+          FreeSite is a private, non-commercial project by a DHBW student. It is not run by or affiliated with the
           DHBW. Responsible for the processing of your data (controller under the GDPR): Felix Karg,{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
         </p>

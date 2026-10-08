@@ -15,8 +15,8 @@ function buildManifest(label: string | undefined): string {
   const icons = label ? "/icons/dev" : "/icons";
   return JSON.stringify(
     {
-      name: label ? `free_site (${label})` : "free_site",
-      short_name: label ? "free_site dev" : "free_site",
+      name: label ? `FreeSite (${label})` : "FreeSite",
+      short_name: label ? "FreeSite dev" : "FreeSite",
       description: "Which exams are free? Vote with your course.",
       lang: "en",
       start_url: "/",

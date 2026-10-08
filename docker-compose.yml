@@ -22,7 +22,7 @@ services:
       DATABASE_URL: postgres://free_site:${POSTGRES_PASSWORD}@database:5432/free_site
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MAIL_FROM: ${MAIL_FROM:-free_site <free@noreply.felixkarg.de>}
+      MAIL_FROM: ${MAIL_FROM:-FreeSite <free@noreply.felixkarg.de>}
       APP_URL: ${APP_URL:-https://free.felixkarg.de}
       ADMIN_SETUP_CODE: ${ADMIN_SETUP_CODE:-}
       INSTANCE_LABEL: ${INSTANCE_LABEL:-}

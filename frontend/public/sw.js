@@ -1,4 +1,4 @@
-// free_site service worker. It only provides an offline page: page loads always go to the network
+// FreeSite service worker. It only provides an offline page: page loads always go to the network
 // first, and the API, live updates and all other requests are never touched or cached. So a new
 // deploy is never hidden behind a stale copy, and no personal data ever lands in a cache.
 const CACHE = "free-site-offline-v1";

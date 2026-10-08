@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router";
 import { ChartBar, ShieldCheck, SignOut, UserCircle } from "@phosphor-icons/react";
+import { InstanceBanner } from "./InstanceBanner";
 import { LogoMark } from "./LogoMark";
 import { useAuth } from "./auth";
+import { I18nProvider, LANGUAGES, LANGUAGE_NAMES, useI18n } from "./i18n";
 import { AccountDeletedPage } from "./pages/AccountDeletedPage";
 import { AccountPage } from "./pages/AccountPage";
 import { AdminPage } from "./pages/admin/AdminPage";
@@ -26,11 +28,12 @@ type Access = "guest" | "user" | "admin" | "any";
  */
 function RequireAccess({ access, children }: { access: Access; children: ReactNode }) {
   const { user, loading } = useAuth();
+  const { t } = useI18n();
   const location = useLocation();
   // Someone who logs in from an invite link continues at the link. Registering needs no detour:
   // the new account is already in the course.
   const joinCode = location.pathname === "/login" ? new URLSearchParams(location.search).get("join") : null;
-  if (loading) return <p className="muted" role="status">Loading…</p>;
+  if (loading) return <p className="muted" role="status">{t("common.loading")}</p>;
   if (access === "guest") {
     return user ? <Navigate to={joinCode ? `/join/${encodeURIComponent(joinCode)}` : "/"} replace /> : children;
   }
@@ -50,32 +53,33 @@ function RequireAccess({ access, children }: { access: Access; children: ReactNo
  */
 function AppBar() {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   return (
     <header className="app-bar">
       <div className="app-bar-inner">
         <Link to="/" className="brand" translate="no">
           <LogoMark className="brand-mark" />
-          <span className="wordmark">free_site</span>
+          <span className="wordmark">FreeSite</span>
         </Link>
         {user && (
-          <nav className="app-nav" aria-label="Main">
+          <nav className="app-nav" aria-label={t("nav.main")}>
             <NavLink to="/" end className="nav-item">
               <ChartBar aria-hidden="true" />
-              <span className="nav-label">Overview</span>
+              <span className="nav-label">{t("nav.overview")}</span>
             </NavLink>
             {user.role === "admin" && (
               <NavLink to="/admin" className="nav-item">
                 <ShieldCheck aria-hidden="true" />
-                <span className="nav-label">Admin</span>
+                <span className="nav-label">{t("nav.admin")}</span>
               </NavLink>
             )}
-            <NavLink to="/account" className="nav-item" aria-label={`${user.username ?? "Your"} (account)`}>
+            <NavLink to="/account" className="nav-item" aria-label={user.username ? t("nav.accountOf", { name: user.username }) : t("nav.accountOwn")}>
               <UserCircle aria-hidden="true" />
-              <span className="nav-name">{user.username ?? "Account"}</span>
+              <span className="nav-name">{user.username ?? t("nav.account")}</span>
             </NavLink>
             <button type="button" className="nav-item" onClick={logout}>
               <SignOut aria-hidden="true" />
-              <span className="nav-label">Log out</span>
+              <span className="nav-label">{t("nav.logout")}</span>
             </button>
           </nav>
         )}
@@ -85,31 +89,57 @@ function AppBar() {
 }
 
 /**
- * Login, registration and reset: the form next to a short explanation of what free_site is,
+ * Login, registration and reset: the form next to a short explanation of what FreeSite is,
  * stacked on phones.
  * @param {{children: ReactNode}} props
  */
 function AuthLayout({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="auth-layout">
       <div className="auth-intro">
-        <p className="auth-title">Which exams are free?</p>
-        <p>
-          Your course rates every module as free, possible or impossible. Everyone sees the totals, nobody sees who
-          voted what.
-        </p>
+        <p className="auth-title">{t("auth.introTitle")}</p>
+        <p>{t("auth.introText")}</p>
       </div>
       {children}
     </div>
   );
 }
 
-/** Root component with the app's routes. */
-export function App() {
+/**
+ * Language choice for visitors who are not logged in. Accounts set their language under Account,
+ * which is saved on the server and follows them to every device.
+ */
+function LanguageSwitch() {
+  const { user } = useAuth();
+  const { t, language, setGuestLanguage } = useI18n();
+  if (user) return null;
+  return (
+    <div className="language-switch" role="group" aria-label={t("footer.language")}>
+      {LANGUAGES.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className="link-button"
+          lang={option}
+          aria-pressed={option === language}
+          onClick={() => setGuestLanguage(option)}
+        >
+          {LANGUAGE_NAMES[option]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The app's routes, inside the language provider so every page can translate. */
+function Shell() {
+  const { t } = useI18n();
   return (
     <>
+      <InstanceBanner />
       <a href="#main" className="skip-link">
-        Skip to content
+        {t("app.skipToContent")}
       </a>
       <AppBar />
       <main id="main" className="container" tabIndex={-1}>
@@ -130,9 +160,19 @@ export function App() {
         </Routes>
       </main>
       <footer className="site-footer">
-        <Link to="/privacy">Privacy</Link>
-        <a href="/.well-known/security.txt">Security</a>
+        <Link to="/privacy">{t("footer.privacy")}</Link>
+        <a href="/.well-known/security.txt">{t("footer.security")}</a>
+        <LanguageSwitch />
       </footer>
     </>
+  );
+}
+
+/** Root component: the language provider around the shell with the app's routes. */
+export function App() {
+  return (
+    <I18nProvider>
+      <Shell />
+    </I18nProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { USER_ROLES, VOTE_VALUES } from "@free-site/shared";
+import { USER_ROLES, VOTE_VALUES, type Language } from "@free-site/shared";
 
 export const userRole = pgEnum("user_role", USER_ROLES);
 export const voteValue = pgEnum("vote_value", VOTE_VALUES);
@@ -15,6 +15,7 @@ export const users = pgTable(
     username: text("username"),
     passwordHash: text("password_hash").notNull(),
     role: userRole("role").notNull().default("user"),
+    language: text("language").$type<Language>().notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("users_username_lower_unique").on(sql`lower(${table.username})`)],

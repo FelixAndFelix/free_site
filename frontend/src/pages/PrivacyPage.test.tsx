@@ -40,6 +40,8 @@ describe("PrivacyPage", () => {
       "Username",
       "Password",
       "Course and role",
+      "Language",
+      "Language choice in your browser",
       "Your votes",
       "Vote history",
       "Session cookie",

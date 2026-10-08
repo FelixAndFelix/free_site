@@ -25,7 +25,7 @@ describe("App", () => {
       renderAt("/");
       await findLoggedInAs("student");
 
-      expect(screen.getByRole("link", { name: "free_site" })).toHaveAttribute("href", "/");
+      expect(screen.getByRole("link", { name: "FreeSite" })).toHaveAttribute("href", "/");
       expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
       expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
       expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("App", () => {
       renderAt("/login");
       await screen.findByRole("heading", { name: "Log in" });
 
-      expect(screen.getByRole("link", { name: "free_site" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "FreeSite" })).toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     });
   });

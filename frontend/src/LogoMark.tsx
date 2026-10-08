@@ -1,5 +1,5 @@
 /**
- * The free_site mark: three rounded bars in the vote colors (free, possible, impossible), like the
+ * The FreeSite mark: three rounded bars in the vote colors (free, possible, impossible), like the
  * vote bar of a module. It takes its colors from the theme tokens, so it follows dark mode.
  * Keep the shapes in sync with scripts/build-icons.mjs, which renders the favicon and app icons.
  * @param {{className?: string}} props

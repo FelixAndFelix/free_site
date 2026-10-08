@@ -1,4 +1,4 @@
-# free_site
+# FreeSite
 
 Webapp for students to call out which exams are free this semester.
 
