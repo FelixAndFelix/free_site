@@ -1,0 +1,16 @@
+{
+  "name": "@free-site/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "1.56.1",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0"
+  }
+}
