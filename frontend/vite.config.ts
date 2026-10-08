@@ -61,6 +61,7 @@ function webAppPlugin(label: string | undefined): Plugin {
 
 export default defineConfig({
   plugins: [react(), webAppPlugin(instanceLabel)],
-  server: { proxy: { "/api": "http://localhost:3000" } },
+  // BACKEND_URL lets the end-to-end tests run the backend on another port; preview uses the same proxy.
+  server: { proxy: { "/api": process.env.BACKEND_URL ?? "http://localhost:3000" } },
   test: { environment: "jsdom", globals: true, setupFiles: ["./src/test-setup.ts"] },
 });

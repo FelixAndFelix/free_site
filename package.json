@@ -5,18 +5,23 @@
   "workspaces": [
     "shared",
     "backend",
-    "frontend"
+    "frontend",
+    "e2e"
   ],
   "scripts": {
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "e2e": "npm run e2e -w e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.1"
+  },
+  "overrides": {
+    "playwright-core": "1.56.1"
   }
 }

@@ -31,6 +31,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run e2e        # browser tests, see e2e/README.md
 ```
 
 Run the full stack locally with Docker Compose:
