@@ -1,4 +1,5 @@
 import { and, eq, isNotNull, lt, ne } from "drizzle-orm";
+import { deleteExpiredAuditEntries } from "../audit/log";
 import type { Db } from "../database";
 import { courseMembers, emailCodes, sessions, users, votes } from "../schema";
 import { changeVote } from "../voting/votes";
@@ -45,13 +46,21 @@ export async function isLastAdmin(db: Db, userId: string): Promise<boolean> {
 }
 
 /**
- * Deletes expired email codes and sessions. They are already rejected when used; this removes
- * them from the database, so data is not kept longer than the privacy page says.
+ * Deletes expired email codes and sessions, and activity log entries past their retention time. They
+ * are already rejected when used; this removes them from the database, so data is not kept longer
+ * than the privacy page says.
  * @param {Db} db
  * @param {Date} now
  */
-export async function deleteExpiredRecords(db: Db, now: Date): Promise<{ emailCodes: number; sessions: number }> {
+export async function deleteExpiredRecords(
+  db: Db,
+  now: Date,
+): Promise<{ emailCodes: number; sessions: number; auditEntries: number }> {
   const deletedCodes = await db.delete(emailCodes).where(lt(emailCodes.expiresAt, now)).returning();
   const deletedSessions = await db.delete(sessions).where(lt(sessions.expiresAt, now)).returning();
-  return { emailCodes: deletedCodes.length, sessions: deletedSessions.length };
+  return {
+    emailCodes: deletedCodes.length,
+    sessions: deletedSessions.length,
+    auditEntries: await deleteExpiredAuditEntries(db, now),
+  };
 }

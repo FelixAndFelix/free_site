@@ -61,6 +61,13 @@ for (const scheme of ["light", "dark"] as const) {
         await page.getByRole("button", { name: "Manage modules" }).first().click();
         await expect(page.getByRole("button", { name: "Hide modules" }).first()).toBeVisible();
         await expectAccessible(page, "admin");
+
+        await page.goto("/admin/activity");
+        await expect(page.getByRole("table")).toBeVisible();
+        await expectAccessible(page, "activity log");
+        await page.getByRole("button", { name: "Sign-ins and accounts" }).click();
+        await expect(page.getByRole("table")).toBeVisible();
+        await expectAccessible(page, "activity log, sign-ins");
       });
     });
   });

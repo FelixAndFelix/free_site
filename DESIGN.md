@@ -140,6 +140,13 @@ lists), move down 1px when pressed and never wrap their label. A link that acts 
 - **Users:** a toolbar (search, course filter, admins only), a count line, then a table on tablets
   and desktops that becomes stacked blocks on phones; 20 rows at a time with "Show more".
 
+- **Activity log** (`/admin/activity`): a panel with a two-part joined control ("tabs", `aria-pressed`)
+  for the two logs, a one-line note on how long entries are kept, and a table (time, what happened as
+  a sentence, email, IP address) that becomes stacked blocks on phones. Emails and addresses are shown
+  in full and are buttons that search for themselves. Above the table sits a filter bar (search field,
+  Event select, Time select, "Clear filters" once something is set) with a count of the shown entries,
+  so a long log never has to be scrolled through. Older entries load on request.
+
 ### Forms
 
 Label above the input (`.field`), 2.75rem inputs with a `--line-strong` border, errors below in

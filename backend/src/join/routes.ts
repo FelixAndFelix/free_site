@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { eq, sql } from "drizzle-orm";
 import type { AuthUser, JoinInfoResponse, JoinResponse } from "@free-site/shared";
+import type { AuditLog } from "../audit/log";
 import { createWindowLimiter } from "../auth/rateLimit";
 import { readSessionUser, requireRole } from "../auth/middleware";
 import type { Db } from "../database";
@@ -12,6 +13,7 @@ import { withdrawVotesOutsideCourse } from "../voting/votes";
 export interface JoinDependencies {
   db: Db;
   events: EventHub;
+  audit: AuditLog;
   now?: () => Date;
 }
 
@@ -25,7 +27,7 @@ const FAILED_LOOKUP_WINDOW_MS = 15 * 60 * 1000;
  * the course name and, for logged-in users, joining the course or switching to it.
  * @param {JoinDependencies} dependencies
  */
-export function createJoinRouter({ db, events, now = () => new Date() }: JoinDependencies) {
+export function createJoinRouter({ db, events, audit, now = () => new Date() }: JoinDependencies) {
   const router = Router();
   const failedLookups = createWindowLimiter({
     limit: FAILED_LOOKUPS_PER_IP,
@@ -111,6 +113,14 @@ export function createJoinRouter({ db, events, now = () => new Date() }: JoinDep
       // Votes only count in the voter's course, so votes on the old course's modules are withdrawn.
       await withdrawVotesOutsideCourse(db, { userId: user.id, courseId: course.id, now: now() });
       events.userLeftCourse(user.id, previousCourseId);
+      await audit.record({
+        category: "access",
+        action: previousCourseId ? "course.switched" : "course.joined",
+        actorUserId: user.id,
+        email: user.email,
+        label: course.name,
+        ip: request.ip,
+      });
     }
     response.json(result);
   });

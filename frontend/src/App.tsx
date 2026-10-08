@@ -7,6 +7,7 @@ import { useAuth } from "./auth";
 import { I18nProvider, LANGUAGES, LANGUAGE_NAMES, useI18n } from "./i18n";
 import { AccountDeletedPage } from "./pages/AccountDeletedPage";
 import { AccountPage } from "./pages/AccountPage";
+import { ActivityPage } from "./pages/admin/ActivityPage";
 import { AdminPage } from "./pages/admin/AdminPage";
 import { ClaimAdminPage } from "./pages/ClaimAdminPage";
 import { HomePage } from "./pages/HomePage";
@@ -147,6 +148,7 @@ function Shell() {
           <Route path="/" element={<RequireAccess access="user"><HomePage /></RequireAccess>} />
           <Route path="/modules/:moduleId" element={<RequireAccess access="user"><ModulePage /></RequireAccess>} />
           <Route path="/admin" element={<RequireAccess access="admin"><AdminPage /></RequireAccess>} />
+          <Route path="/admin/activity" element={<RequireAccess access="admin"><ActivityPage /></RequireAccess>} />
           <Route path="/account" element={<RequireAccess access="user"><AccountPage /></RequireAccess>} />
           <Route path="/account-deleted" element={<AccountDeletedPage />} />
           <Route path="/username" element={<RequireAccess access="user"><UsernamePage /></RequireAccess>} />

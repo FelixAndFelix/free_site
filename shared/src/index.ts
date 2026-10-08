@@ -301,3 +301,110 @@ export interface JoinRequest {
 export interface JoinResponse {
   course: { id: string; name: string };
 }
+
+/**
+ * Two logs, kept apart because they are kept for different times and answer different questions:
+ * "audit" records what admins changed, "access" records who signed in or out of the app and how
+ * accounts were created, recovered or deleted.
+ */
+export const AUDIT_CATEGORIES = ["audit", "access"] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+export const AUDIT_ACTIONS = [
+  // audit: admin changes
+  "course.created",
+  "course.renamed",
+  "course.deleted",
+  "course.join_code_rotated",
+  "module.created",
+  "module.updated",
+  "module.deleted",
+  "user.role_changed",
+  "user.course_changed",
+  // access: sign-ins and accounts
+  "account.registered",
+  "login.succeeded",
+  "login.failed",
+  "password_reset.requested",
+  "password_reset.completed",
+  "admin.claimed",
+  "account.deleted",
+  "course.joined",
+  "course.switched",
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** Which actions belong to which log; the filter by event offers the actions of the log being viewed. */
+export const AUDIT_ACTIONS_BY_CATEGORY: Record<AuditCategory, readonly AuditAction[]> = {
+  audit: [
+    "course.created",
+    "course.renamed",
+    "course.deleted",
+    "course.join_code_rotated",
+    "module.created",
+    "module.updated",
+    "module.deleted",
+    "user.role_changed",
+    "user.course_changed",
+  ],
+  access: [
+    "account.registered",
+    "login.succeeded",
+    "login.failed",
+    "password_reset.requested",
+    "password_reset.completed",
+    "admin.claimed",
+    "account.deleted",
+    "course.joined",
+    "course.switched",
+  ],
+};
+
+/** Time ranges the log can be limited to, counted back from now: 24 hours, 7 days, 30 days. */
+export const AUDIT_RANGES = ["24h", "7d", "30d"] as const;
+export type AuditRange = (typeof AUDIT_RANGES)[number];
+
+/**
+ * Narrows a value to an audit action.
+ * @param {unknown} value
+ */
+export function isAuditAction(value: unknown): value is AuditAction {
+  return typeof value === "string" && (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * Narrows a value to an audit time range.
+ * @param {unknown} value
+ */
+export function isAuditRange(value: unknown): value is AuditRange {
+  return typeof value === "string" && (AUDIT_RANGES as readonly string[]).includes(value);
+}
+
+/** Longest search text the log accepts. */
+export const AUDIT_SEARCH_MAX_LENGTH = 100;
+
+/** One entry of the activity log as shown to admins. */
+export interface AuditEntry {
+  id: string;
+  createdAt: string;
+  category: AuditCategory;
+  action: AuditAction;
+  /** Who did it; null if unknown or if that account has been deleted since. */
+  actor: string | null;
+  /** The current email address of that account. */
+  actorEmail: string | null;
+  /** Whom it concerned (another user); null if none or deleted since. */
+  target: string | null;
+  /** The email address the event is about, as it was at the time (also for failed logins of unknown addresses). */
+  email: string | null;
+  /** What it concerned that is not a user: a course or module name, or the new role. */
+  label: string | null;
+  /** The address the request came from. */
+  ip: string | null;
+}
+
+/** Response body of GET /api/admin/audit: newest first, nextCursor continues with older entries. */
+export interface AuditResponse {
+  entries: AuditEntry[];
+  nextCursor: string | null;
+}

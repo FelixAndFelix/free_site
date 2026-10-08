@@ -29,7 +29,21 @@ const STORED_DATA = [
   ],
   ["Session cookie", "Keeps you logged in", "30 days, or until you log out"],
   ["Email codes", "Confirming your email and resetting your password", "10 minutes"],
-  ["IP address", "Limits against abuse, e.g. too many code requests", "In memory only, until the next server restart"],
+  [
+    "IP address",
+    "Limits against abuse, e.g. too many code requests",
+    "In memory for the limits, until the next server restart. The logs below keep it longer",
+  ],
+  [
+    "Activity log",
+    "Which admin changed what (courses, modules, roles, who is in which course) and when, with the admin's email address and IP address. Only admins can see it. For security and to resolve mistakes",
+    "1 year",
+  ],
+  [
+    "Access log",
+    "Registrations, logins, failed logins (including the email address that was typed, even if no account has it), password resets, joining a course and deleted accounts, each with the email address, IP address and time. Only admins can see it. To detect abuse and investigate security problems",
+    "90 days. Entries stay for this time even after you delete your account",
+  ],
   [
     "Database backups",
     "Restoring the service after a failure. A backup is a copy of all the data above",
@@ -93,7 +107,7 @@ export function PrivacyPage() {
         </div>
         <p>
           You can change your vote on a module once every {VOTE_COOLDOWN_MINUTES} minutes; the time of your last change
-          is stored with the vote for this. Expired codes and sessions are deleted automatically every hour.
+          is stored with the vote for this. Expired codes and sessions, and log entries past their retention time, are deleted automatically every hour.
         </p>
         <p>
           <strong>Legal basis:</strong> providing the service you signed up for (Art. 6(1)(b) GDPR); protection
@@ -127,7 +141,8 @@ export function PrivacyPage() {
           Under the GDPR you have the right to access your data, to have it corrected or deleted, to restrict or object
           to its processing and to receive it in a portable format. Write to{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. You can delete your account yourself under{" "}
-          <Link to="/account">Account</Link>; this removes your email, username, password and votes.
+          <Link to="/account">Account</Link>; this removes your email, username, password and votes. Entries about
+          you in the activity log and the access log expire on their own after the times in the table above.
         </p>
         <p>You also have the right to lodge a complaint with a data protection supervisory authority.</p>
       </section>
