@@ -680,21 +680,6 @@ details[open] summary {
   width: auto;
 }
 
-.invite-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-control);
-  background: var(--surface-sunk);
-  font-size: var(--text-sm);
-}
-
-.invite-label {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-
 .actions button svg {
   width: 1.125rem;
   height: 1.125rem;
@@ -1332,12 +1317,6 @@ details[open] summary {
 
   .users-actions {
     text-align: right;
-  }
-
-  .invite-row {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 0.75rem;
   }
 
   .auth-layout {

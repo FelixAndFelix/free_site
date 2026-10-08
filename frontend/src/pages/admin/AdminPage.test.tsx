@@ -40,11 +40,12 @@ describe("AdminPage", () => {
     expect(await findLoggedInAs("felix")).toBeInTheDocument();
   });
 
-  it("shows the courses with their invite links and counts", async () => {
+  it("shows the courses with their counts but not the invite link itself", async () => {
     mockAdminApi();
     renderAt("/admin");
-    expect(await screen.findByText(`${window.location.origin}/join/INF24B-7KQ2XMPA`)).toBeInTheDocument();
-    expect(screen.getByText("12 members, 2 modules")).toBeInTheDocument();
+    expect(await screen.findByText("12 members, 2 modules")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy invite link" })).toBeInTheDocument();
+    expect(screen.queryByText(/INF24B-7KQ2XMPA/)).not.toBeInTheDocument();
   });
 
   it("creates a course", async () => {

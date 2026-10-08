@@ -119,10 +119,6 @@ export function CoursesSection({ courses, onChanged }: CoursesSectionProps) {
                   </>
                 )}
               </div>
-              <div className="invite-row">
-                <span className="invite-label">Invite link</span>
-                <code>{inviteLink(course)}</code>
-              </div>
               <div className="actions">
                 <button type="button" className="secondary" onClick={() => copyInviteLink(course)}>
                   <Copy aria-hidden="true" />
