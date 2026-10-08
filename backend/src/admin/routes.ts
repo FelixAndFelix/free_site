@@ -1,7 +1,10 @@
 import { Router, type Request, type Response } from "express";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
+  AUDIT_ACTIONS,
   AUDIT_CATEGORIES,
+  AUDIT_RANGES,
+  AUDIT_SEARCH_MAX_LENGTH,
   MAX_SEMESTER,
   NAME_MAX_LENGTH,
   USER_ROLES,
@@ -9,6 +12,7 @@ import {
   type AdminUserEntry,
   type AuditAction,
   type AuditCategory,
+  type AuditRange,
   type AuthUser,
   type CourseResponse,
   type CoursesResponse,
@@ -312,12 +316,24 @@ export function createAdminRouter({ db, events, audit, now = () => new Date() }:
     response.json(body);
   });
 
-  // The activity log, one category at a time (admin changes, or sign-ins and accounts).
+  // The activity log, one category at a time, optionally filtered (see AuditLog.list).
+  const RANGE_MS: Record<AuditRange, number> = { "24h": 24 * 3600_000, "7d": 7 * 24 * 3600_000, "30d": 30 * 24 * 3600_000 };
   router.get("/audit", async (request, response) => {
-    const { category, cursor } = request.query;
+    const { category, cursor, q, action, range } = request.query;
     if (!AUDIT_CATEGORIES.includes(category as AuditCategory)) return sendError(response, 400, "invalid_request");
-    if (cursor !== undefined && typeof cursor !== "string") return sendError(response, 400, "invalid_request");
-    const page = await audit.list({ category: category as AuditCategory, cursor });
+    for (const value of [cursor, q, action, range]) {
+      if (value !== undefined && typeof value !== "string") return sendError(response, 400, "invalid_request");
+    }
+    if (typeof q === "string" && q.length > AUDIT_SEARCH_MAX_LENGTH) return sendError(response, 400, "invalid_request");
+    if (typeof action === "string" && !AUDIT_ACTIONS.includes(action as AuditAction)) return sendError(response, 400, "invalid_request");
+    if (typeof range === "string" && !AUDIT_RANGES.includes(range as AuditRange)) return sendError(response, 400, "invalid_request");
+    const page = await audit.list({
+      category: category as AuditCategory,
+      cursor: cursor as string | undefined,
+      query: q as string | undefined,
+      action: action as AuditAction | undefined,
+      since: typeof range === "string" ? new Date(now().getTime() - RANGE_MS[range as AuditRange]) : undefined,
+    });
     if (!page) return sendError(response, 400, "invalid_request");
     response.json(page);
   });

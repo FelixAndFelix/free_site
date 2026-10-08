@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AdminCourse, AdminUserEntry, ApiErrorCode, CoursesResponse, UsersResponse } from "@free-site/shared";
 import { apiRequest } from "../../api";
+import { Link } from "react-router";
 import { BackLink } from "../../BackLink";
 import { errorKey, useI18n } from "../../i18n";
 import { CoursesSection } from "./CoursesSection";
@@ -41,6 +42,9 @@ export function AdminPage() {
       <header className="page-intro">
         <BackLink to="/">{t("common.allModules")}</BackLink>
         <h1>{t("admin.title")}</h1>
+        <Link to="/admin/activity" className="button secondary activity-link">
+          {t("activity.link")}
+        </Link>
       </header>
       {error && <p role="alert">{t(errorKey(error))}</p>}
       {loaded && <AdminSummary courses={courses} users={users} />}

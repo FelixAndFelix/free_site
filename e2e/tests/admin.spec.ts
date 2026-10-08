@@ -92,6 +92,58 @@ test.describe("an admin", () => {
   });
 });
 
+test.describe("the activity log", () => {
+  test.use({ storageState: ADMIN_STATE });
+
+  test("shows admin changes and sign-ins with full email and IP addresses", async ({ page, browser, adminApi }) => {
+    const course = await createCourse(adminApi, "Log course");
+    const kira = newUser("kira");
+    const guest = await newGuestContext(browser, "10.97.0.1");
+    try {
+      const visitor = await guest.newPage();
+      await registerViaInvite(visitor, course.joinCode, kira);
+      // Someone tries an address that has no account.
+      await visitor.getByRole("button", { name: "Log out" }).click();
+      await visitor.getByLabel("DHBW email").fill("ghost@dhbw.example");
+      await visitor.getByLabel("Password").fill("not a real password");
+      await visitor.getByRole("button", { name: "Log in" }).first().click();
+      await expect(visitor.getByRole("alert")).toBeVisible();
+    } finally {
+      await guest.close();
+    }
+
+    await page.goto("/admin");
+    await page.getByRole("link", { name: "Activity log" }).click();
+    const created = page.getByRole("row", { name: /admin created the course Log course/ });
+    await expect(created).toBeVisible();
+    await expect(created).toContainText("admin@dhbw.example");
+    await expect(created).toContainText(/10\.\d+\.\d+\.7/);
+
+    await page.getByRole("button", { name: "Sign-ins and accounts" }).click();
+    const registered = page.getByRole("row", { name: new RegExp(`${kira.username} registered`) });
+    await expect(registered).toContainText(kira.email);
+    await expect(registered).toContainText("10.97.0.1");
+    const failed = page.getByRole("row", { name: /Failed login: no account has this email address/ }).first();
+    await expect(failed).toContainText("ghost@dhbw.example");
+    await expect(failed).toContainText("10.97.0.1");
+
+    // Filters narrow the log down: by event, then by searching for an address.
+    await page.getByLabel("Event").selectOption("login.failed");
+    await expect(page.getByRole("row", { name: new RegExp(`${kira.username} registered`) })).toHaveCount(0);
+    await expect(failed).toBeVisible();
+    await page.getByLabel("Event").selectOption("");
+    await page.getByLabel("Search").fill(kira.email);
+    await expect(registered).toBeVisible();
+    await expect(page.getByRole("row", { name: /Failed login/ })).toHaveCount(0);
+    await page.getByLabel("Time").selectOption("24h");
+    await expect(registered).toBeVisible();
+    await page.getByLabel("Search").fill("nobody-has-this@dhbw.example");
+    await expect(page.getByText("No entries match these filters.")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(registered).toBeVisible();
+  });
+});
+
 test("a student is sent away from the admin area", async ({ page, adminApi }) => {
   const course = await createCourse(adminApi, "Forbidden course");
   await registerViaInvite(page, course.joinCode, newUser("hugo"));

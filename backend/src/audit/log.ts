@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AuditAction, AuditCategory, AuditEntry, AuditResponse } from "@free-site/shared";
 import type { Db } from "../database";
@@ -54,14 +54,17 @@ export function createAuditLog(db: Db, now: () => Date = () => new Date()) {
 
   /**
    * Lists one log, newest first, with the user names resolved. cursor is the nextCursor of the
-   * previous page.
-   * @param {{category: AuditCategory, cursor?: string}} options
+   * previous page. The filters combine: query is searched case-insensitively in the email address,
+   * IP address, label (course or module name) and the user names and emails; action limits the kind
+   * of event; since drops older entries.
+   * @param {ListOptions} options
    */
-  async function list({ category, cursor }: { category: AuditCategory; cursor?: string }): Promise<AuditResponse | null> {
+  async function list({ category, cursor, query, action, since }: ListOptions): Promise<AuditResponse | null> {
     const position = cursor === undefined ? null : parseCursor(cursor);
     if (cursor !== undefined && !position) return null;
     const actor = alias(users, "actor");
     const target = alias(users, "target");
+    const needle = query?.trim() ? `%${escapeLike(query.trim())}%` : null;
     const rows = await db
       .select({
         id: auditLog.id,
@@ -81,6 +84,19 @@ export function createAuditLog(db: Db, now: () => Date = () => new Date()) {
       .where(
         and(
           eq(auditLog.category, category),
+          action ? eq(auditLog.action, action) : undefined,
+          since ? gte(auditLog.createdAt, since) : undefined,
+          needle
+            ? or(
+                ilike(auditLog.email, needle),
+                ilike(auditLog.ip, needle),
+                ilike(auditLog.label, needle),
+                ilike(actor.username, needle),
+                ilike(actor.email, needle),
+                ilike(target.username, needle),
+                ilike(target.email, needle),
+              )
+            : undefined,
           position ? sql`(${auditLog.createdAt}, ${auditLog.id}) < (${position.createdAt}, ${position.id})` : undefined,
         ),
       )
@@ -99,6 +115,24 @@ export function createAuditLog(db: Db, now: () => Date = () => new Date()) {
 }
 
 export type AuditLog = ReturnType<typeof createAuditLog>;
+
+export interface ListOptions {
+  category: AuditCategory;
+  cursor?: string;
+  /** Text to look for in emails, addresses, names and labels. */
+  query?: string;
+  action?: AuditAction;
+  since?: Date;
+}
+
+/**
+ * Escapes the characters that mean something inside a LIKE pattern, so a search for "10.0_1" or
+ * "100%" finds exactly that text.
+ * @param {string} text
+ */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
 
 /**
  * Parses a cursor of the form "<iso time>|<uuid>", or returns null if it is not one.

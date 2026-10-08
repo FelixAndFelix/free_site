@@ -334,6 +334,55 @@ export const AUDIT_ACTIONS = [
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
+/** Which actions belong to which log; the filter by event offers the actions of the log being viewed. */
+export const AUDIT_ACTIONS_BY_CATEGORY: Record<AuditCategory, readonly AuditAction[]> = {
+  audit: [
+    "course.created",
+    "course.renamed",
+    "course.deleted",
+    "course.join_code_rotated",
+    "module.created",
+    "module.updated",
+    "module.deleted",
+    "user.role_changed",
+    "user.course_changed",
+  ],
+  access: [
+    "account.registered",
+    "login.succeeded",
+    "login.failed",
+    "password_reset.requested",
+    "password_reset.completed",
+    "admin.claimed",
+    "account.deleted",
+    "course.joined",
+    "course.switched",
+  ],
+};
+
+/** Time ranges the log can be limited to, counted back from now: 24 hours, 7 days, 30 days. */
+export const AUDIT_RANGES = ["24h", "7d", "30d"] as const;
+export type AuditRange = (typeof AUDIT_RANGES)[number];
+
+/**
+ * Narrows a value to an audit action.
+ * @param {unknown} value
+ */
+export function isAuditAction(value: unknown): value is AuditAction {
+  return typeof value === "string" && (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * Narrows a value to an audit time range.
+ * @param {unknown} value
+ */
+export function isAuditRange(value: unknown): value is AuditRange {
+  return typeof value === "string" && (AUDIT_RANGES as readonly string[]).includes(value);
+}
+
+/** Longest search text the log accepts. */
+export const AUDIT_SEARCH_MAX_LENGTH = 100;
+
 /** One entry of the activity log as shown to admins. */
 export interface AuditEntry {
   id: string;

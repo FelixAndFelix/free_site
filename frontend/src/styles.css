@@ -780,6 +780,95 @@ details[open] summary {
   font-size: var(--text-sm);
 }
 
+.activity-link {
+  align-self: flex-start;
+  margin-top: 0.5rem;
+}
+
+.activity-card {
+  gap: 0.875rem;
+}
+
+/* Two or three choices as one joined control, like the vote buttons. */
+.tabs {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 3px;
+  align-self: flex-start;
+  padding: 3px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.tab {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.tab:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.tab[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.log-line {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.log-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.log-clear {
+  justify-self: start;
+}
+
+/* An email or address in the log that searches for itself when clicked. */
+.log-filter {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-decoration: underline dotted var(--line-strong);
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.log-filter:hover {
+  background: none;
+  text-decoration-style: solid;
+}
+
+.activity-table th[scope="row"] {
+  font-weight: 400;
+}
+
+.activity-table time {
+  white-space: nowrap;
+}
+
 /* ---------- Overview ---------- */
 
 .semester {
@@ -1341,6 +1430,15 @@ details[open] summary {
   .users-toolbar {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
     align-items: end;
+  }
+
+  .log-filters {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .log-clear {
+    justify-self: auto;
   }
 
   .users-admins {

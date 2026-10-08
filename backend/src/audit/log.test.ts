@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuditEntry } from "@free-site/shared";
+import { AUDIT_ACTIONS, AUDIT_ACTIONS_BY_CATEGORY, type AuditEntry } from "@free-site/shared";
 import { createDatabase } from "../database";
 import type { Mail } from "../mail";
 import { auditLog } from "../schema";
@@ -201,6 +201,7 @@ describe.skipIf(!process.env.DATABASE_URL)("activity log (real Postgres)", () =>
 
     it("records a reset request for an unknown address with the typed address, and sends no mail", async () => {
       const mailsBefore = sentMails.length;
+      tick();
       await request(app).post("/api/auth/reset/start").set("X-Forwarded-For", "203.0.113.5").send({ email: "nobody@dhbw.example" }).expect(202);
 
       expect(sentMails).toHaveLength(mailsBefore);
@@ -288,6 +289,146 @@ describe.skipIf(!process.env.DATABASE_URL)("activity log (real Postgres)", () =>
 
       expect(seen).toHaveLength(120);
       expect(new Set(seen).size).toBe(120);
+    });
+  });
+
+  describe("filters", () => {
+    /** Writes entries straight into the log, so a test controls time, address and text exactly. */
+    async function seed(rows: Array<{ ageHours?: number; category?: "audit" | "access"; action?: AuditEntry["action"]; email?: string; ip?: string; label?: string }>) {
+      await database.db.execute(sql`truncate audit_log`);
+      await database.db.insert(auditLog).values(
+        rows.map((row, index) => ({
+          createdAt: new Date(time - (row.ageHours ?? 0) * 3600_000 - index),
+          category: row.category ?? "access",
+          action: row.action ?? "login.succeeded",
+          email: row.email ?? null,
+          ip: row.ip ?? null,
+          label: row.label ?? null,
+        })),
+      );
+    }
+
+    /** The labels of the entries a filter returns, newest first. */
+    async function found(query: string, category: "audit" | "access" = "access"): Promise<string[]> {
+      return (await readLog(category, query)).map((entry) => entry.label ?? entry.email ?? "");
+    }
+
+    it("searches emails, ignoring case and matching any part", async () => {
+      await seed([{ email: "anna@dhbw.example", label: "a" }, { email: "ben@dhbw.example", label: "b" }, { email: "ANNA.MUELLER@dhbw.example", label: "c" }]);
+
+      expect(await found("&q=anna")).toEqual(["a", "c"]);
+      expect(await found("&q=BEN@")).toEqual(["b"]);
+      expect(await found("&q=dhbw.example")).toEqual(["a", "b", "c"]);
+      expect(await found("&q=nobody")).toEqual([]);
+    });
+
+    it("searches IP addresses by any part, such as a network prefix", async () => {
+      await seed([{ ip: "203.0.113.57", label: "a" }, { ip: "203.0.113.9", label: "b" }, { ip: "198.51.100.7", label: "c" }, { ip: "2001:db8::1", label: "d" }]);
+
+      expect(await found("&q=203.0.113.")).toEqual(["a", "b"]);
+      expect(await found("&q=198.51.100.7")).toEqual(["c"]);
+      expect(await found("&q=2001:db8")).toEqual(["d"]);
+    });
+
+    it("searches the names of courses and modules and of the users involved", async () => {
+      await registerUser(app, sentMails, { email: "student@dhbw.example", username: "anna" });
+      tick();
+      const course = await request(app).post("/api/admin/courses").set("Cookie", adminCookie).send({ name: "Wirtschaftsinformatik" }).expect(201);
+      tick();
+      await request(app).post(`/api/admin/courses/${course.body.course.id}/modules`).set("Cookie", adminCookie).send({ name: "Datenbanken", semester: 3 }).expect(201);
+
+      expect(await found("&q=datenbank", "audit")).toEqual(["Datenbanken (Wirtschaftsinformatik)"]);
+      expect((await readLog("audit", "&q=wirtschaft")).map((entry) => entry.action)).toEqual(["module.created", "course.created"]);
+      // The admin did these things, so the admin's username and email find them too.
+      expect(await readLog("audit", "&q=admin@dhbw")).toHaveLength(2);
+      // Access entries are found by the user they belong to.
+      expect((await readLog("access", "&q=anna")).map((entry) => entry.action)).toEqual(["account.registered"]);
+    });
+
+    it("treats % and _ in the search as plain characters", async () => {
+      await seed([{ label: "100% sure" }, { label: "a_b" }, { label: "ab" }, { label: "back\\slash" }]);
+
+      expect(await found("&q=100%25")).toEqual(["100% sure"]);
+      expect(await found("&q=a_b")).toEqual(["a_b"]);
+      expect(await found("&q=%25")).toEqual(["100% sure"]);
+      expect(await found("&q=_")).toEqual(["a_b"]);
+      expect(await found("&q=%5C")).toEqual(["back\\slash"]);
+    });
+
+    it("limits the log to one kind of event", async () => {
+      await seed([
+        { action: "login.failed", label: "f1" },
+        { action: "login.succeeded", label: "s1" },
+        { action: "login.failed", label: "f2" },
+      ]);
+
+      expect(await found("&action=login.failed")).toEqual(["f1", "f2"]);
+      expect(await found("&action=account.deleted")).toEqual([]);
+    });
+
+    it("limits the log to the last 24 hours, 7 days or 30 days", async () => {
+      await seed([
+        { ageHours: 2, label: "2 hours" },
+        { ageHours: 3 * 24, label: "3 days" },
+        { ageHours: 20 * 24, label: "20 days" },
+        { ageHours: 40 * 24, label: "40 days" },
+      ]);
+
+      expect(await found("&range=24h")).toEqual(["2 hours"]);
+      expect(await found("&range=7d")).toEqual(["2 hours", "3 days"]);
+      expect(await found("&range=30d")).toEqual(["2 hours", "3 days", "20 days"]);
+      expect(await found("")).toEqual(["2 hours", "3 days", "20 days", "40 days"]);
+    });
+
+    it("combines the filters", async () => {
+      await seed([
+        { action: "login.failed", ip: "203.0.113.5", ageHours: 1, label: "match" },
+        { action: "login.failed", ip: "203.0.113.5", ageHours: 5 * 24, label: "too old" },
+        { action: "login.succeeded", ip: "203.0.113.5", ageHours: 1, label: "wrong action" },
+        { action: "login.failed", ip: "198.51.100.5", ageHours: 1, label: "wrong address" },
+      ]);
+
+      expect(await found("&q=203.0.113&action=login.failed&range=24h")).toEqual(["match"]);
+    });
+
+    it("pages through filtered results and only counts matching entries", async () => {
+      await database.db.execute(sql`truncate audit_log`);
+      await database.db.insert(auditLog).values(
+        Array.from({ length: 120 }, (_, index) => ({
+          createdAt: new Date(time - index * 1000),
+          category: "access" as const,
+          action: (index % 2 === 0 ? "login.failed" : "login.succeeded") as "login.failed" | "login.succeeded",
+          label: `entry ${index}`,
+        })),
+      );
+
+      const seen: string[] = [];
+      let cursor = "";
+      for (let page = 0; page < 5; page++) {
+        const response = await request(app).get(`/api/admin/audit?category=access&action=login.failed${cursor}`).set("Cookie", adminCookie).expect(200);
+        seen.push(...response.body.entries.map((entry: AuditEntry) => entry.label));
+        if (!response.body.nextCursor) break;
+        cursor = `&cursor=${encodeURIComponent(response.body.nextCursor)}`;
+      }
+
+      expect(seen).toHaveLength(60);
+      expect(seen.every((label) => Number(label.replace("entry ", "")) % 2 === 0)).toBe(true);
+    });
+
+    it("rejects filters it does not understand", async () => {
+      const get = (query: string) => request(app).get(`/api/admin/audit?category=access${query}`).set("Cookie", adminCookie);
+
+      await get("&action=login.hacked").expect(400);
+      await get("&range=1y").expect(400);
+      await get(`&q=${"x".repeat(101)}`).expect(400);
+      await get("&q=ok&q=twice").expect(400);
+      await get(`&q=${"x".repeat(100)}`).expect(200);
+    });
+
+    it("lists every action in exactly one log", () => {
+      const listed = [...AUDIT_ACTIONS_BY_CATEGORY.audit, ...AUDIT_ACTIONS_BY_CATEGORY.access];
+
+      expect([...listed].sort()).toEqual([...AUDIT_ACTIONS].sort());
     });
   });
 
